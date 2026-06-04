@@ -1,0 +1,17 @@
+node_modules
+dist
+dist-ssr
+*.local
+.DS_Store
+.env
+.env.*
+!.env.example
+.vite
+*.log
+*.tsbuildinfo
+tools/__pycache__
+# scratch copies of the workbook
+*ot_inspect.xlsx
+*ot_export_copy.xlsx
+# your REAL exported data — never commit to the public repo
+private/
