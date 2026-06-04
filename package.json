@@ -8,7 +8,9 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "export-workbook": "python tools/export_workbook.py"
+    "deploy": "npm run build && npx --yes gh-pages@6 -d dist -b gh-pages -m \"Deploy Flywheel\"",
+    "export-workbook": "python tools/export_workbook.py",
+    "make-sample": "python tools/make_sample.py"
   },
   "dependencies": {
     "lucide-react": "^0.456.0",
