@@ -1,0 +1,87 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  @apply bg-ink-950 text-slate-200 font-sans antialiased;
+  background-image:
+    radial-gradient(900px 500px at 12% -8%, rgba(16, 185, 129, 0.08), transparent 60%),
+    radial-gradient(700px 480px at 100% 0%, rgba(245, 158, 11, 0.05), transparent 55%);
+  background-attachment: fixed;
+}
+
+/* Thin, dark scrollbars */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #2d3b56 transparent;
+}
+*::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+*::-webkit-scrollbar-thumb {
+  background: #2d3b56;
+  border-radius: 9px;
+}
+
+@layer components {
+  .card {
+    @apply rounded-2xl border border-white/5 bg-ink-850/70 backdrop-blur-sm shadow-card;
+  }
+  .card-pad {
+    @apply p-5;
+  }
+  .chip {
+    @apply inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium;
+  }
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold
+           transition-colors disabled:opacity-40 disabled:cursor-not-allowed;
+  }
+  .btn-primary {
+    @apply btn bg-flux-500 text-ink-950 hover:bg-flux-400;
+  }
+  .btn-ghost {
+    @apply btn border border-white/10 text-slate-200 hover:bg-white/5;
+  }
+  .stat-label {
+    @apply text-[11px] font-semibold uppercase tracking-wider text-slate-400;
+  }
+  .num {
+    @apply font-mono tabular-nums;
+  }
+  .nav-link {
+    @apply flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-400
+           transition-colors hover:bg-white/5 hover:text-slate-100;
+  }
+  .nav-link-active {
+    @apply bg-flux-500/10 text-flux-300 ring-1 ring-inset ring-flux-500/20;
+  }
+  .th {
+    @apply px-3 py-2 text-left text-[11px] font-semibold uppercase tracking-wider text-slate-400;
+  }
+  .td {
+    @apply px-3 py-2.5 text-sm text-slate-200;
+  }
+  .input {
+    @apply w-full rounded-xl border border-white/10 bg-ink-900/80 px-3 py-2 text-sm text-slate-100
+           outline-none transition focus:border-flux-500/50 focus:ring-2 focus:ring-flux-500/20;
+  }
+}
+
+.pos {
+  @apply text-flux-400;
+}
+.neg {
+  @apply text-loss-400;
+}

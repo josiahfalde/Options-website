@@ -1,0 +1,391 @@
+{
+  "exportedAt": "2026-06-03",
+  "capitalBase": 10000.0,
+  "lastPrices": {
+    "F": 8.8,
+    "T": 22.1,
+    "PLTR": 46.3,
+    "BAC": 41.05,
+    "NIO": 4.85
+  },
+  "spy": {
+    "now": 754.13,
+    "year_ago": 587.46,
+    "year_ago_date": "2025-05-16"
+  },
+  "trades": [
+    {
+      "ticker": "F",
+      "side": "credit",
+      "action": "CSP",
+      "date": "2026-01-12",
+      "shares": 100,
+      "amount": 18.0,
+      "status": "Expired"
+    },
+    {
+      "ticker": "PLTR",
+      "side": "credit",
+      "action": "CSP",
+      "date": "2026-01-20",
+      "shares": 100,
+      "amount": 62.0,
+      "status": "Closed"
+    },
+    {
+      "ticker": "F",
+      "side": "credit",
+      "action": "CSP",
+      "date": "2026-01-28",
+      "shares": 100,
+      "amount": 22.0,
+      "status": "Assigned"
+    },
+    {
+      "ticker": "PLTR",
+      "side": "debit",
+      "action": "BB",
+      "date": "2026-02-02",
+      "shares": 100,
+      "amount": 28.0,
+      "invested": null,
+      "status": ""
+    },
+    {
+      "ticker": "F",
+      "side": "debit",
+      "action": "AAssignSTK",
+      "date": "2026-02-03",
+      "shares": 100,
+      "amount": 11.0,
+      "invested": 1100.0,
+      "status": ""
+    },
+    {
+      "ticker": "T",
+      "side": "credit",
+      "action": "CSP",
+      "date": "2026-02-04",
+      "shares": 100,
+      "amount": 21.0,
+      "status": "Closed"
+    },
+    {
+      "ticker": "F",
+      "side": "credit",
+      "action": "CC",
+      "date": "2026-02-10",
+      "shares": 100,
+      "amount": 34.0,
+      "status": "Closed"
+    },
+    {
+      "ticker": "PLTR",
+      "side": "credit",
+      "action": "CSP",
+      "date": "2026-02-13",
+      "shares": 100,
+      "amount": 58.0,
+      "status": "Expired"
+    },
+    {
+      "ticker": "BAC",
+      "side": "credit",
+      "action": "CSP",
+      "date": "2026-02-17",
+      "shares": 100,
+      "amount": 28.0,
+      "status": "Expired"
+    },
+    {
+      "ticker": "T",
+      "side": "debit",
+      "action": "BB",
+      "date": "2026-02-18",
+      "shares": 100,
+      "amount": 6.0,
+      "invested": null,
+      "status": ""
+    },
+    {
+      "ticker": "T",
+      "side": "credit",
+      "action": "CSP",
+      "date": "2026-02-20",
+      "shares": 100,
+      "amount": 19.0,
+      "status": "Expired"
+    },
+    {
+      "ticker": "F",
+      "side": "debit",
+      "action": "BB",
+      "date": "2026-02-24",
+      "shares": 100,
+      "amount": 11.0,
+      "invested": null,
+      "status": ""
+    },
+    {
+      "ticker": "F",
+      "side": "credit",
+      "action": "CC",
+      "date": "2026-02-26",
+      "shares": 100,
+      "amount": 30.0,
+      "status": "Expired"
+    },
+    {
+      "ticker": "PLTR",
+      "side": "credit",
+      "action": "CSP",
+      "date": "2026-03-02",
+      "shares": 100,
+      "amount": 71.0,
+      "status": "Closed"
+    },
+    {
+      "ticker": "T",
+      "side": "credit",
+      "action": "CSP",
+      "date": "2026-03-06",
+      "shares": 100,
+      "amount": 23.0,
+      "status": "Closed"
+    },
+    {
+      "ticker": "F",
+      "side": "credit",
+      "action": "CC",
+      "date": "2026-03-09",
+      "shares": 100,
+      "amount": 28.0,
+      "status": "Closed"
+    },
+    {
+      "ticker": "NIO",
+      "side": "credit",
+      "action": "CSP",
+      "date": "2026-03-10",
+      "shares": 100,
+      "amount": 12.0,
+      "status": "Expired"
+    },
+    {
+      "ticker": "BAC",
+      "side": "credit",
+      "action": "CSP",
+      "date": "2026-03-16",
+      "shares": 100,
+      "amount": 31.0,
+      "status": "Closed"
+    },
+    {
+      "ticker": "PLTR",
+      "side": "debit",
+      "action": "BB",
+      "date": "2026-03-16",
+      "shares": 100,
+      "amount": 95.0,
+      "invested": null,
+      "status": ""
+    },
+    {
+      "ticker": "T",
+      "side": "debit",
+      "action": "BB",
+      "date": "2026-03-19",
+      "shares": 100,
+      "amount": 5.0,
+      "invested": null,
+      "status": ""
+    },
+    {
+      "ticker": "F",
+      "side": "debit",
+      "action": "BB",
+      "date": "2026-03-20",
+      "shares": 100,
+      "amount": 9.0,
+      "invested": null,
+      "status": ""
+    },
+    {
+      "ticker": "T",
+      "side": "credit",
+      "action": "CSP",
+      "date": "2026-03-23",
+      "shares": 100,
+      "amount": 18.0,
+      "status": "Expired"
+    },
+    {
+      "ticker": "F",
+      "side": "credit",
+      "action": "CC",
+      "date": "2026-03-24",
+      "shares": 100,
+      "amount": 26.0,
+      "status": "Closed"
+    },
+    {
+      "ticker": "BAC",
+      "side": "debit",
+      "action": "BB",
+      "date": "2026-03-30",
+      "shares": 100,
+      "amount": 9.0,
+      "invested": null,
+      "status": ""
+    },
+    {
+      "ticker": "F",
+      "side": "debit",
+      "action": "BB",
+      "date": "2026-04-02",
+      "shares": 100,
+      "amount": 8.0,
+      "invested": null,
+      "status": ""
+    },
+    {
+      "ticker": "PLTR",
+      "side": "credit",
+      "action": "CSP",
+      "date": "2026-04-06",
+      "shares": 100,
+      "amount": 55.0,
+      "status": "Expired"
+    },
+    {
+      "ticker": "T",
+      "side": "credit",
+      "action": "CSP",
+      "date": "2026-04-10",
+      "shares": 100,
+      "amount": 20.0,
+      "status": "Expired"
+    },
+    {
+      "ticker": "NIO",
+      "side": "credit",
+      "action": "CSP",
+      "date": "2026-04-13",
+      "shares": 100,
+      "amount": 14.0,
+      "status": "Closed"
+    },
+    {
+      "ticker": "F",
+      "side": "credit",
+      "action": "CC",
+      "date": "2026-04-14",
+      "shares": 100,
+      "amount": 24.0,
+      "status": "Expired"
+    },
+    {
+      "ticker": "BAC",
+      "side": "credit",
+      "action": "CSP",
+      "date": "2026-04-20",
+      "shares": 100,
+      "amount": 26.0,
+      "status": "Expired"
+    },
+    {
+      "ticker": "NIO",
+      "side": "debit",
+      "action": "BB",
+      "date": "2026-04-27",
+      "shares": 100,
+      "amount": 4.0,
+      "invested": null,
+      "status": ""
+    },
+    {
+      "ticker": "T",
+      "side": "credit",
+      "action": "CSP",
+      "date": "2026-05-01",
+      "shares": 100,
+      "amount": 22.0,
+      "status": "Closed"
+    },
+    {
+      "ticker": "F",
+      "side": "credit",
+      "action": "CC",
+      "date": "2026-05-05",
+      "shares": 100,
+      "amount": 27.0,
+      "status": "Closed"
+    },
+    {
+      "ticker": "PLTR",
+      "side": "credit",
+      "action": "CSP",
+      "date": "2026-05-11",
+      "shares": 100,
+      "amount": 64.0,
+      "status": "Open"
+    },
+    {
+      "ticker": "T",
+      "side": "debit",
+      "action": "BB",
+      "date": "2026-05-15",
+      "shares": 100,
+      "amount": 4.0,
+      "invested": null,
+      "status": ""
+    },
+    {
+      "ticker": "BAC",
+      "side": "credit",
+      "action": "CSP",
+      "date": "2026-05-18",
+      "shares": 100,
+      "amount": 24.0,
+      "status": "Open"
+    },
+    {
+      "ticker": "F",
+      "side": "debit",
+      "action": "BB",
+      "date": "2026-05-19",
+      "shares": 100,
+      "amount": 10.0,
+      "invested": null,
+      "status": ""
+    },
+    {
+      "ticker": "T",
+      "side": "credit",
+      "action": "CSP",
+      "date": "2026-05-22",
+      "shares": 100,
+      "amount": 17.0,
+      "status": "Open"
+    },
+    {
+      "ticker": "NIO",
+      "side": "credit",
+      "action": "CSP",
+      "date": "2026-05-26",
+      "shares": 100,
+      "amount": 11.0,
+      "status": "Open"
+    },
+    {
+      "ticker": "F",
+      "side": "credit",
+      "action": "CC",
+      "date": "2026-05-29",
+      "shares": 100,
+      "amount": 25.0,
+      "status": "Open"
+    }
+  ],
+  "_note": "Anonymized demo data. Import your own workbook on the Data page."
+}
