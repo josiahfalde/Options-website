@@ -116,10 +116,11 @@ settings row on signup. Apply with `supabase db push`.
   issues — edit, don't blindly re-run).
 - **When a phase ships, flip its JF issue to Done** (`issueUpdate`, Done state id
   `4eab6467-1ff6-44d7-ac18-02e625dc7db0`).
-- **GitHub↔Linear auto-linking (PR/branch magic words) is NOT set up** — that requires
-  installing the GitHub integration via Linear's UI (Settings → Integrations → GitHub,
-  an OAuth flow that can't be done by API). Optional. Until then, reference issue IDs
-  like `JF-7` in commit messages manually.
+- **GitHub↔Linear integration IS enabled** (`github` in workspace integrations).
+  It links via **branch names / pull requests** containing an issue ID — e.g. a branch
+  named `jf-7-auth-ui` or a PR with "JF-7" in the title/description, and keywords like
+  "Fixes JF-7" auto-close on merge. **Direct pushes to `main` do NOT create links**
+  (no PR event to hook onto). To get auto-linking, use a feature-branch + PR per issue.
 
 ---
 
