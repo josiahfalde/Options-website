@@ -122,6 +122,12 @@ settings row on signup. Apply with `supabase db push`.
   "Fixes JF-7" auto-close on merge. **Direct pushes to `main` do NOT create links**
   (no PR event to hook onto). To get auto-linking, use a feature-branch + PR per issue.
 
+**Working convention (decided 2026-06-05):** branch + PR per issue for *substantial*
+work (auth, billing, webhook, etc.) — branch named like `jf-7-auth-ui`, PR with the
+issue ID so Linear auto-links and can auto-close on merge. *Small/mechanical* changes
+go straight to `main`. For PR-flow issues, set the JF issue to "In Progress" when work
+starts and let PR-merge (or a manual `issueUpdate`) move it to Done.
+
 ---
 
 ## 6. Known problems / caveats / open threads
