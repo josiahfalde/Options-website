@@ -24,3 +24,6 @@ private/
 
 # Supabase CLI local scratch state
 supabase/.temp/
+
+# Linear personal API key (never commit)
+.linear-token
