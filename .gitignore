@@ -15,3 +15,12 @@ tools/__pycache__
 *ot_export_copy.xlsx
 # your REAL exported data — never commit to the public repo
 private/
+
+# Supabase CLI personal access token (never commit)
+.supabase-token
+.supabase-db-password
+.env.local
+.supabase-service-role.env
+
+# Supabase CLI local scratch state
+supabase/.temp/

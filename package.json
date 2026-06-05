@@ -13,6 +13,7 @@
     "make-sample": "python tools/make_sample.py"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.107.0",
     "lucide-react": "^0.456.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",

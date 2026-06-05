@@ -4,23 +4,34 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from "react";
 import type { Dataset, Trade } from "../types";
 import seed from "./seed.json";
+import { supabase } from "../lib/supabase";
+import { useAuth } from "../auth/AuthProvider";
+import {
+  deleteTradeRemote,
+  fetchDataset,
+  insertTrade,
+  insertTrades,
+  updateTradeRemote,
+  upsertPrice,
+  upsertSettings,
+} from "./remote";
 
 // ============================================================================
-// Data layer. Today: a local-first store persisted to localStorage so your data
-// never leaves the browser (privacy by default — like premiuminsights.ai).
+// Data layer. Two modes, one API (pages never change):
 //
-// FUTURE (public, multi-user): swap the read/write internals here for Supabase
-// (Postgres + Auth — CLI already installed). The component API below
-// (dataset + mutators) is the seam; pages never touch storage directly, so the
-// migration is contained to this file.
+//   • DEMO  (logged out): anonymized seed data, in-memory only. Visitors can
+//     poke around; nothing persists. "Sign in to save" is the conversion path.
+//   • CLOUD (logged in):  Supabase is the source of truth, scoped to the user
+//     by Row-Level Security. Mutations are optimistic and revert on error.
+//
+// This file + remote.ts are the only places that know where data lives.
 // ============================================================================
-
-const STORAGE_KEY = "flywheel:dataset:v1";
 
 let _id = 0;
 const newId = () => `t${Date.now().toString(36)}-${(_id++).toString(36)}`;
@@ -51,19 +62,22 @@ function normalize(raw: any): Dataset {
   };
 }
 
-function loadInitial(): Dataset {
-  try {
-    const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored) return normalize(JSON.parse(stored));
-  } catch {
-    /* fall through to seed */
-  }
-  return normalize(seed);
-}
+const emptyDataset = (): Dataset => ({
+  exportedAt: new Date().toISOString().slice(0, 10),
+  capitalBase: 0,
+  lastPrices: {},
+  spy: { now: 0, year_ago: 0, year_ago_date: "" },
+  trades: [],
+});
+
+export type StoreMode = "demo" | "cloud";
 
 interface StoreCtx {
   dataset: Dataset;
   isSeed: boolean;
+  mode: StoreMode;
+  loading: boolean;
+  error: string | null;
   addTrade: (t: Omit<Trade, "id">) => void;
   updateTrade: (id: string, patch: Partial<Trade>) => void;
   deleteTrade: (id: string) => void;
@@ -78,120 +92,244 @@ interface StoreCtx {
 const Ctx = createContext<StoreCtx | null>(null);
 
 export function StoreProvider({ children }: { children: ReactNode }) {
-  const [dataset, setDataset] = useState<Dataset>(loadInitial);
-  const [isSeed, setIsSeed] = useState<boolean>(() => !localStorage.getItem(STORAGE_KEY));
+  const { user, loading: authLoading } = useAuth();
+  const mode: StoreMode = user ? "cloud" : "demo";
 
-  // persist on every change
+  const [dataset, setDataset] = useState<Dataset>(() => normalize(seed));
+  const [isSeed, setIsSeed] = useState(true);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Keep the latest dataset in a ref so async error-reverts read fresh state.
+  const datasetRef = useRef(dataset);
+  datasetRef.current = dataset;
+
+  // --- load on auth change -------------------------------------------------
   useEffect(() => {
-    try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(dataset));
-    } catch {
-      /* storage full / disabled — in-memory still works */
+    if (authLoading) return;
+    let cancelled = false;
+
+    if (mode === "demo" || !supabase || !user) {
+      // logged out → ephemeral anonymized demo
+      setDataset(normalize(seed));
+      setIsSeed(true);
+      setLoading(false);
+      setError(null);
+      return;
     }
-  }, [dataset]);
 
-  const persistMark = useCallback(() => setIsSeed(false), []);
+    // logged in → load this user's data from Supabase
+    setLoading(true);
+    setError(null);
+    fetchDataset(supabase, user.id)
+      .then((ds) => {
+        if (cancelled) return;
+        setDataset(ds);
+        setIsSeed(ds.trades.length === 0);
+      })
+      .catch((e) => {
+        if (cancelled) return;
+        setError(e?.message ?? "Failed to load your data.");
+        setDataset(emptyDataset());
+      })
+      .finally(() => !cancelled && setLoading(false));
 
+    return () => {
+      cancelled = true;
+    };
+  }, [mode, user, authLoading]);
+
+  // --- helpers -------------------------------------------------------------
+  // Run a Supabase write in cloud mode; in demo mode it's a no-op (state-only).
+  const runRemote = useCallback(
+    (fn: () => Promise<unknown>) => {
+      if (mode !== "cloud" || !supabase || !user) return;
+      fn().catch((e) => setError(e?.message ?? "Save failed."));
+    },
+    [mode, user]
+  );
+
+  // --- mutators (optimistic; cloud writes go through runRemote) ------------
   const addTrade = useCallback(
     (t: Omit<Trade, "id">) => {
-      persistMark();
-      setDataset((d) => ({ ...d, trades: [...d.trades, { ...t, id: newId() }] }));
+      setIsSeed(false);
+      setError(null);
+      if (mode === "cloud" && supabase && user) {
+        // remote-first so we get the real DB id, then reflect it locally
+        insertTrade(supabase, user.id, t)
+          .then((saved) => setDataset((d) => ({ ...d, trades: [...d.trades, saved] })))
+          .catch((e) => setError(e?.message ?? "Save failed."));
+      } else {
+        setDataset((d) => ({ ...d, trades: [...d.trades, { ...t, id: newId() }] }));
+      }
     },
-    [persistMark]
+    [mode, user]
   );
 
   const updateTrade = useCallback(
     (id: string, patch: Partial<Trade>) => {
-      persistMark();
+      setIsSeed(false);
+      const prev = datasetRef.current;
       setDataset((d) => ({
         ...d,
         trades: d.trades.map((t) => (t.id === id ? { ...t, ...patch } : t)),
       }));
+      runRemote(() =>
+        updateTradeRemote(supabase!, id, patch).catch((e) => {
+          setDataset(prev); // revert
+          throw e;
+        })
+      );
     },
-    [persistMark]
+    [runRemote]
   );
 
   const deleteTrade = useCallback(
     (id: string) => {
-      persistMark();
+      setIsSeed(false);
+      const prev = datasetRef.current;
       setDataset((d) => ({ ...d, trades: d.trades.filter((t) => t.id !== id) }));
+      runRemote(() =>
+        deleteTradeRemote(supabase!, id).catch((e) => {
+          setDataset(prev);
+          throw e;
+        })
+      );
     },
-    [persistMark]
+    [runRemote]
   );
 
   const replaceDataset = useCallback(
     (ds: Dataset, opts?: { merge?: boolean }) => {
-      persistMark();
+      setIsSeed(false);
+      setError(null);
       const next = normalize(ds);
-      setDataset((d) => {
-        if (!opts?.merge) return next;
-        // merge: keep existing trades, append new ones, prefer incoming prices/spy
-        const seen = new Set(
-          d.trades.map((t) => `${t.ticker}|${t.date}|${t.action}|${t.amount}`)
-        );
-        const merged = [
-          ...d.trades,
-          ...next.trades.filter(
+
+      // Compute the merged/replaced trade list off current state.
+      const base = datasetRef.current;
+      const seen = new Set(
+        base.trades.map((t) => `${t.ticker}|${t.date}|${t.action}|${t.amount}`)
+      );
+      const incoming = opts?.merge
+        ? next.trades.filter(
             (t) => !seen.has(`${t.ticker}|${t.date}|${t.action}|${t.amount}`)
-          ),
-        ];
-        return {
-          ...d,
-          trades: merged,
-          lastPrices: { ...d.lastPrices, ...next.lastPrices },
-          capitalBase: next.capitalBase || d.capitalBase,
-          spy: next.spy.now ? next.spy : d.spy,
-        };
-      });
+          )
+        : next.trades;
+
+      if (mode === "cloud" && supabase && user) {
+        // Persist: on replace (not merge) clear existing first, then bulk insert.
+        (async () => {
+          try {
+            if (!opts?.merge) {
+              const { error: delErr } = await supabase
+                .from("trades")
+                .delete()
+                .eq("user_id", user.id);
+              if (delErr) throw delErr;
+            }
+            await insertTrades(
+              supabase,
+              user.id,
+              incoming.map(({ id: _id, ...rest }) => rest)
+            );
+            // settings + prices
+            await upsertSettings(supabase, user.id, {
+              capitalBase: next.capitalBase || base.capitalBase,
+              spyNow: next.spy.now || base.spy.now,
+              spyYearAgo: next.spy.year_ago || base.spy.year_ago,
+              spyYearAgoDate: next.spy.year_ago_date || base.spy.year_ago_date,
+            });
+            for (const [ticker, price] of Object.entries({
+              ...base.lastPrices,
+              ...next.lastPrices,
+            })) {
+              await upsertPrice(supabase, user.id, ticker, price as number);
+            }
+            // reflect authoritative server ids
+            const ds2 = await fetchDataset(supabase, user.id);
+            setDataset(ds2);
+          } catch (e: any) {
+            setError(e?.message ?? "Import failed.");
+          }
+        })();
+      } else {
+        setDataset((d) =>
+          opts?.merge
+            ? {
+                ...d,
+                trades: [...d.trades, ...incoming],
+                lastPrices: { ...d.lastPrices, ...next.lastPrices },
+                capitalBase: next.capitalBase || d.capitalBase,
+                spy: next.spy.now ? next.spy : d.spy,
+              }
+            : next
+        );
+      }
     },
-    [persistMark]
+    [mode, user]
   );
 
   const setCapitalBase = useCallback(
     (n: number) => {
-      persistMark();
+      setIsSeed(false);
       setDataset((d) => ({ ...d, capitalBase: n }));
+      runRemote(() => upsertSettings(supabase!, user!.id, { capitalBase: n }));
     },
-    [persistMark]
+    [runRemote, user]
   );
 
   const setPrice = useCallback(
     (ticker: string, price: number) => {
-      persistMark();
+      setIsSeed(false);
       setDataset((d) => ({
         ...d,
         lastPrices: { ...d.lastPrices, [ticker.toUpperCase()]: price },
       }));
+      runRemote(() => upsertPrice(supabase!, user!.id, ticker, price));
     },
-    [persistMark]
+    [runRemote, user]
   );
 
   const setSpy = useCallback(
     (now: number, yearAgo: number, yearAgoDate: string) => {
-      persistMark();
-      setDataset((d) => ({
-        ...d,
-        spy: { now, year_ago: yearAgo, year_ago_date: yearAgoDate },
-      }));
+      setIsSeed(false);
+      setDataset((d) => ({ ...d, spy: { now, year_ago: yearAgo, year_ago_date: yearAgoDate } }));
+      runRemote(() =>
+        upsertSettings(supabase!, user!.id, {
+          spyNow: now,
+          spyYearAgo: yearAgo,
+          spyYearAgoDate: yearAgoDate,
+        })
+      );
     },
-    [persistMark]
+    [runRemote, user]
   );
 
   const resetToSeed = useCallback(() => {
-    localStorage.removeItem(STORAGE_KEY);
+    // Demo-only affordance. In cloud mode this just reloads the demo view
+    // locally without touching the user's saved data.
     setDataset(normalize(seed));
     setIsSeed(true);
   }, []);
 
   const clearAll = useCallback(() => {
-    persistMark();
+    setIsSeed(false);
     setDataset((d) => ({ ...d, trades: [] }));
-  }, [persistMark]);
+    if (mode === "cloud" && supabase && user) {
+      runRemote(async () => {
+        const { error: e } = await supabase!.from("trades").delete().eq("user_id", user.id);
+        if (e) throw e;
+      });
+    }
+  }, [mode, user, runRemote]);
 
   const value = useMemo<StoreCtx>(
     () => ({
       dataset,
       isSeed,
+      mode,
+      loading,
+      error,
       addTrade,
       updateTrade,
       deleteTrade,
@@ -205,6 +343,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     [
       dataset,
       isSeed,
+      mode,
+      loading,
+      error,
       addTrade,
       updateTrade,
       deleteTrade,
