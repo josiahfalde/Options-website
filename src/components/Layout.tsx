@@ -13,6 +13,7 @@ import type { ReactNode } from "react";
 import { BRAND } from "../brand";
 import { useStore } from "../data/store";
 import { AuthButton } from "../auth/AuthButton";
+import { DemoBanner } from "../auth/DemoBanner";
 
 const NAV = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
@@ -86,6 +87,8 @@ export function Layout({ children }: { children: ReactNode }) {
             ))}
           </nav>
         </div>
+
+        <DemoBanner />
 
         <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 md:px-8 md:py-8">
           {children}
