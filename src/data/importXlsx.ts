@@ -107,13 +107,56 @@ export async function parseWorkbook(file: File): Promise<Dataset> {
   };
 }
 
-// ---- Fidelity CSV (lightweight first pass) ---------------------------------
-// Fidelity option descriptions look like:  "PUT (SOFI) SOFI JUN 20 26 $12 ..."
-// We parse SOLD/BOUGHT OPENING/CLOSING rows into credit/debit trades.
-export function parseFidelityCsv(text: string): Trade[] {
-  const lines = text.split(/\r?\n/).filter((l) => l.trim());
-  if (!lines.length) return [];
-  const header = splitCsv(lines[0]).map((h) => h.toLowerCase().trim());
+// ---- Fidelity CSV ----------------------------------------------------------
+// A Fidelity "Accounts_History" export. Each option row carries the contract in
+// its symbol ( -SOFI260702P15.5 = ticker + YYMMDD expiry + P/C + strike) and an
+// Action describing the transaction. We decode the symbol for strike/expiry and
+// reconcile the four transaction kinds per contract so statuses resolve:
+//   SOLD OPENING    -> a credit (CSP/CC), status starts "Open"
+//   BOUGHT CLOSING  -> the matching sold contract -> "Closed" + a BB debit
+//   EXPIRED         -> the matching sold contract -> "Expired"
+//   ASSIGNED (put)  -> the matching CSP -> "Assigned" + an AAssignSTK debit
+//   ASSIGNED (call) -> the matching CC  -> "Assigned" (shares called away)
+// NB: Fidelity exports carry no earnings dates — that's not in the file.
+
+type OptKind = "sell" | "buy" | "expired" | "assigned";
+interface OptEvent {
+  kind: OptKind;
+  ticker: string;
+  type: "P" | "C";
+  strike: number | null;
+  expiry: string | null;
+  date: string;
+  amount: number; // absolute $
+  shares: number; // contracts * 100
+}
+
+export interface CsvImport {
+  trades: Trade[];
+  /** Peak cash-secured-put collateral ever committed — a sensible default
+   * capital base when the CSV (which has no cash balance) is all we have. */
+  suggestedCapitalBase: number;
+}
+
+// " -SOFI260702P15.5" -> { ticker, expiry: 2026-07-02, type: P, strike: 15.5 }
+function parseOptionSymbol(sym: string): Omit<OptEvent, "kind" | "date" | "amount" | "shares"> | null {
+  const m = sym.replace(/\s/g, "").match(/^-?([A-Z]+)(\d{2})(\d{2})(\d{2})([CP])(\d+(?:\.\d+)?)$/);
+  if (!m) return null;
+  const [, ticker, yy, mm, dd, cp, strike] = m;
+  return {
+    ticker,
+    type: cp as "P" | "C",
+    strike: parseFloat(strike),
+    expiry: `20${yy}-${mm}-${dd}`,
+  };
+}
+
+export function parseFidelityCsv(text: string): CsvImport {
+  const lines = text.split(/\r?\n/);
+  const headerIdx = lines.findIndex((l) => /run date/i.test(l) && /action/i.test(l));
+  if (headerIdx < 0) return { trades: [], suggestedCapitalBase: 0 };
+
+  const header = splitCsv(lines[headerIdx]).map((h) => h.toLowerCase().trim());
   const idx = (name: string) => header.findIndex((h) => h.includes(name));
   const cAction = idx("action");
   const cDate = idx("run date") >= 0 ? idx("run date") : idx("date");
@@ -122,51 +165,148 @@ export function parseFidelityCsv(text: string): Trade[] {
   const cAmount = idx("amount");
   const cQty = idx("quantity");
 
-  const out: Trade[] = [];
-  for (let i = 1; i < lines.length; i++) {
+  // 1. Parse each option row into a structured event.
+  const events: OptEvent[] = [];
+  for (let i = headerIdx + 1; i < lines.length; i++) {
+    if (!lines[i].trim()) continue;
     const f = splitCsv(lines[i]);
     const action = (f[cAction] || "").toUpperCase();
-    if (!/OPTION|PUT|CALL|ASSIGNED/.test(action) && !/OPTION/.test((f[cDesc] || "").toUpperCase()))
-      continue;
     const desc = (f[cDesc] || "").toUpperCase();
-    const isPut = /\bPUT\b/.test(action + desc);
-    const isCall = /\bCALL\b/.test(action + desc);
-    const opening = /OPENING/.test(action);
-    const closing = /CLOSING/.test(action);
-    const sold = /SOLD/.test(action);
-    const assigned = /ASSIGNED/.test(action);
-    const amount = Math.abs(parseFloat((f[cAmount] || "0").replace(/[$,]/g, "")) || 0);
-    const date = normalizeDate(f[cDate] || "");
-    const ticker = extractTicker(f[cSymbol] || "", desc);
-    const shares = Math.abs(parseInt(f[cQty] || "1", 10) || 1) * 100;
-    if (!date || !ticker) continue;
 
-    let act: TradeAction | null = null;
-    let side: "credit" | "debit" = "credit";
-    if (assigned) {
-      act = "AAssignSTK";
-      side = "debit";
-    } else if (sold && opening) {
-      act = isPut ? "CSP" : isCall ? "CC" : "CSP";
-      side = "credit";
-    } else if (closing) {
-      act = "BB";
-      side = "debit";
-    }
-    if (!act) continue;
-    out.push({
-      id: `fid-${i}`,
-      ticker,
-      side,
-      action: act,
+    const opt = parseOptionSymbol(f[cSymbol] || "") ?? parseOptionFromDesc(desc);
+    if (!opt) continue; // not an option row (disclaimer footer, dividends, etc.)
+
+    let kind: OptKind | null = null;
+    if (/ASSIGNED/.test(action)) kind = "assigned";
+    else if (/EXPIRED/.test(action)) kind = "expired";
+    else if (/SOLD/.test(action) && /OPENING/.test(action)) kind = "sell";
+    else if (/BOUGHT/.test(action) && /CLOSING/.test(action)) kind = "buy";
+    if (!kind) continue;
+
+    const date = normalizeDate(f[cDate] || "");
+    if (!date) continue;
+    const contracts = Math.abs(parseInt(f[cQty] || "1", 10) || 1);
+    events.push({
+      kind,
+      ...opt,
       date,
-      shares,
-      amount,
-      invested: act === "AAssignSTK" ? amount : null,
-      status: act === "BB" ? "" : "Open",
+      amount: Math.abs(parseFloat((f[cAmount] || "0").replace(/[$,]/g, "")) || 0),
+      shares: contracts * 100,
     });
   }
-  return out;
+
+  // 2. Reconcile per contract (ticker+expiry+type+strike), chronologically.
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  const byContract = new Map<string, OptEvent[]>();
+  for (const e of events) {
+    const key = `${e.ticker}|${e.expiry}|${e.type}|${e.strike}`;
+    (byContract.get(key) ?? byContract.set(key, []).get(key)!).push(e);
+  }
+
+  const trades: Trade[] = [];
+  const collatDeltas: { date: string; d: number }[] = []; // for capital-base estimate
+  let tid = 0;
+  for (const evs of byContract.values()) {
+    evs.sort((a, b) => a.date.localeCompare(b.date));
+    const openSells: { trade: Trade; collateral: number; closeDate?: string }[] = [];
+    for (const e of evs) {
+      if (e.kind === "sell") {
+        const t: Trade = {
+          id: `fid-${tid++}`,
+          ticker: e.ticker,
+          side: "credit",
+          action: e.type === "P" ? "CSP" : "CC",
+          date: e.date,
+          shares: e.shares,
+          amount: round2(e.amount),
+          status: "Open",
+          strike: e.strike,
+          expiry: e.expiry,
+          invested: null,
+        };
+        trades.push(t);
+        // Only cash-secured puts tie up cash collateral.
+        const collateral = e.type === "P" && e.strike ? e.strike * e.shares : 0;
+        openSells.push({ trade: t, collateral });
+        if (collateral) collatDeltas.push({ date: e.date, d: collateral });
+      } else {
+        const open = openSells.shift(); // FIFO: close the oldest open leg
+        if (open?.collateral) collatDeltas.push({ date: e.date, d: -open.collateral });
+
+        if (e.kind === "buy") {
+          if (open) open.trade.status = "Closed";
+          trades.push({
+            id: `fid-${tid++}`,
+            ticker: e.ticker,
+            side: "debit",
+            action: "BB",
+            date: e.date,
+            shares: e.shares,
+            amount: round2(e.amount),
+            status: "",
+            strike: e.strike,
+            expiry: e.expiry,
+            invested: null,
+          });
+        } else if (e.kind === "expired") {
+          if (open) open.trade.status = "Expired";
+        } else if (e.kind === "assigned") {
+          if (open) open.trade.status = "Assigned";
+          // A put assignment buys shares at the strike; a call assignment sells
+          // shares away (handled via the CC's "Assigned" status in compute.ts).
+          if (e.type === "P" && e.strike) {
+            trades.push({
+              id: `fid-${tid++}`,
+              ticker: e.ticker,
+              side: "debit",
+              action: "AAssignSTK",
+              date: e.date,
+              shares: e.shares,
+              amount: 0,
+              status: "",
+              strike: e.strike,
+              expiry: e.expiry,
+              invested: round2(e.strike * e.shares),
+            });
+          }
+        }
+      }
+    }
+  }
+
+  trades.sort((a, b) => a.date.localeCompare(b.date) || a.ticker.localeCompare(b.ticker));
+
+  // 3. Estimate a capital base = the peak CSP collateral ever committed at once.
+  collatDeltas.sort((a, b) => a.date.localeCompare(b.date));
+  let running = 0;
+  let peak = 0;
+  for (const { d } of collatDeltas) {
+    running += d;
+    if (running > peak) peak = running;
+  }
+  return { trades, suggestedCapitalBase: Math.round(peak) };
+}
+
+// Fallback when the symbol column is blank: pull contract from the description,
+// e.g. "PUT (SOFI) SOFI TECHNOLOGIES JUN 26 26 $9.5 (100 SHS)".
+function parseOptionFromDesc(desc: string): Omit<OptEvent, "kind" | "date" | "amount" | "shares"> | null {
+  const tk = desc.match(/\(([A-Z]{1,5})\)/);
+  const type: "P" | "C" | null = /\bPUT\b/.test(desc) ? "P" : /\bCALL\b/.test(desc) ? "C" : null;
+  const mdy = desc.match(/([A-Z]{3})\s+(\d{1,2})\s+(\d{2})\b/); // MON DD YY
+  const strike = desc.match(/\$(\d+(?:\.\d+)?)/);
+  if (!tk || !type || !mdy) return null;
+  const MON: Record<string, string> = {
+    JAN: "01", FEB: "02", MAR: "03", APR: "04", MAY: "05", JUN: "06",
+    JUL: "07", AUG: "08", SEP: "09", OCT: "10", NOV: "11", DEC: "12",
+  };
+  const mm = MON[mdy[1]];
+  if (!mm) return null;
+  return {
+    ticker: tk[1],
+    type,
+    strike: strike ? parseFloat(strike[1]) : null,
+    expiry: `20${mdy[3]}-${mm}-${mdy[2].padStart(2, "0")}`,
+  };
 }
 
 function splitCsv(line: string): string[] {
@@ -194,11 +334,4 @@ function normalizeDate(s: string): string | null {
     return `${y}-${mo.padStart(2, "0")}-${da.padStart(2, "0")}`;
   }
   return null;
-}
-
-function extractTicker(symbol: string, desc: string): string | null {
-  const paren = desc.match(/\(([A-Z]{1,5})\)/);
-  if (paren) return paren[1];
-  const sym = symbol.replace(/[^A-Z]/gi, "").toUpperCase();
-  return sym.slice(0, 5) || null;
 }
