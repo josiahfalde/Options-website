@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
+import { createPortal } from "react-dom";
 import { X, Loader2, Cog } from "lucide-react";
 import { useAuth } from "./AuthProvider";
 import { BRAND } from "../brand";
@@ -98,7 +99,10 @@ export function AuthModal({
     // login success closes via the `user` effect.
   }
 
-  return (
+  // Portal to <body> so the overlay escapes the sidebar's backdrop-filter
+  // ancestor — otherwise `position: fixed` resolves against the sidebar, not
+  // the viewport, and the modal lands trapped on the left.
+  return createPortal(
     <div
       className="fixed inset-0 z-50 grid place-items-center bg-ink-950/70 p-4 backdrop-blur-sm"
       onMouseDown={(e) => e.target === e.currentTarget && onClose()}
@@ -211,6 +215,7 @@ export function AuthModal({
           )}
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
