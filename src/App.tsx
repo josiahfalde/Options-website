@@ -7,6 +7,7 @@ import Screener from "./pages/Screener";
 import RadarPage from "./pages/Radar";
 import Insights from "./pages/Insights";
 import ImportData from "./pages/ImportData";
+import Account from "./pages/Account";
 
 export default function App() {
   return (
@@ -19,6 +20,7 @@ export default function App() {
         <Route path="/radar" element={<RadarPage />} />
         <Route path="/insights" element={<Insights />} />
         <Route path="/import" element={<ImportData />} />
+        <Route path="/account" element={<Account />} />
         <Route path="*" element={<Dashboard />} />
       </Routes>
     </Layout>
