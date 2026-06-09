@@ -12,7 +12,7 @@ import {
 import { useStore } from "../data/store";
 import { parseWorkbook, parseFidelityCsv } from "../data/importXlsx";
 import { Card, Pill, SectionTitle } from "../components/ui";
-import { todayISO, cls } from "../lib/format";
+import { todayISO, cls, usd0 } from "../lib/format";
 import type { Trade, TradeAction } from "../types";
 
 export default function ImportData() {
@@ -36,10 +36,25 @@ export default function ImportData() {
         flash(true, `Imported ${ds.trades.length} trades across ${Object.keys(ds.lastPrices).length} tickers.`);
       } else if (/\.csv$/i.test(file.name)) {
         const text = await file.text();
-        const trades = parseFidelityCsv(text);
+        const { trades, suggestedCapitalBase } = parseFidelityCsv(text);
         if (!trades.length) return flash(false, "Couldn't parse option trades from that CSV.");
-        replaceDataset({ ...dataset, trades: [...dataset.trades, ...trades] }, { merge: true });
-        flash(true, `Added ${trades.length} trades from CSV.`);
+        // The CSV has no cash balance; if no capital base is set yet, seed it
+        // with the estimated peak collateral so yields aren't divided by ~$0.
+        const setBase = !dataset.capitalBase && suggestedCapitalBase > 0;
+        replaceDataset(
+          {
+            ...dataset,
+            trades: [...dataset.trades, ...trades],
+            capitalBase: dataset.capitalBase || suggestedCapitalBase,
+          },
+          { merge: true }
+        );
+        flash(
+          true,
+          setBase
+            ? `Added ${trades.length} trades. Set capital base to ${usd0(suggestedCapitalBase)} (≈ peak put collateral) — adjust below if needed.`
+            : `Added ${trades.length} trades from CSV.`
+        );
       } else if (/\.json$/i.test(file.name)) {
         const ds = JSON.parse(await file.text());
         if (!ds.trades?.length) return flash(false, "That JSON has no trades.");
