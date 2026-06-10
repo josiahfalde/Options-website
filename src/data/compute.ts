@@ -214,6 +214,32 @@ export function allClosedPositions(ds: Dataset): ClosedPosition[] {
     .sort((a, b) => b.closeDate.localeCompare(a.closeDate));
 }
 
+// ---- capital base estimate -------------------------------------------------
+// When the user hasn't set a capital base (e.g. a broker CSV carries no cash
+// balance), estimate one from the trades: the peak cash-secured-put collateral
+// committed at any one time (Σ strike×shares of puts open simultaneously). A
+// sound denominator for yield-on-capital — far better than the $1 fallback.
+export function estimateCapitalBase(trades: Trade[]): number {
+  const pts: { d: string; a: number }[] = [];
+  for (const t of trades) {
+    if (t.action !== "CSP" || !t.strike) continue;
+    const collateral = t.strike * t.shares;
+    const end = t.expiry && t.expiry > t.date ? t.expiry : t.date;
+    pts.push({ d: t.date, a: collateral }); // collateral committed
+    pts.push({ d: end, a: -collateral }); // released at/by expiry
+  }
+  if (!pts.length) return 0;
+  // Release (−) before open (+) on the same day so a same-day roll isn't double-counted.
+  pts.sort((x, y) => x.d.localeCompare(y.d) || x.a - y.a);
+  let cur = 0;
+  let peak = 0;
+  for (const p of pts) {
+    cur += p.a;
+    if (cur > peak) peak = cur;
+  }
+  return Math.round(peak);
+}
+
 // ---- portfolio headline ----------------------------------------------------
 export interface Portfolio {
   realized: number;
@@ -222,6 +248,8 @@ export interface Portfolio {
   mtm: number;
   unrealized: number;
   capitalBase: number;
+  capitalEstimated: boolean; // true when capitalBase was derived, not user-set
+  hasSpy: boolean; // false when no SPY benchmark is configured
   returnPct: number; // realized / capital
   mtmReturnPct: number;
   annualizedReturn: number;
@@ -252,7 +280,8 @@ export function computePortfolio(ds: Dataset, asOf = todayISO()): Portfolio {
   const buybacks = sum(tickers.map((t) => t.buybacks));
   const unrealized = sum(tickers.map((t) => t.unrealized));
   const mtm = realized + unrealized;
-  const capitalBase = ds.capitalBase || 1;
+  const capitalEstimated = !ds.capitalBase;
+  const capitalBase = ds.capitalBase || estimateCapitalBase(ds.trades) || 1;
 
   const closed = allClosedPositions(ds);
   const wins = closed.filter((p) => p.isWin && p.outcome !== "assigned").length;
@@ -273,7 +302,8 @@ export function computePortfolio(ds: Dataset, asOf = todayISO()): Portfolio {
   const annualizedReturn = returnPct * (365 / daysActive);
   const monthlyYield = returnPct / (daysActive / 30.4);
 
-  const spyReturn = ds.spy.now / ds.spy.year_ago - 1;
+  const hasSpy = ds.spy.year_ago > 0;
+  const spyReturn = hasSpy ? ds.spy.now / ds.spy.year_ago - 1 : 0;
   const alpha = returnPct - spyReturn;
 
   const contracts = sum(tickers.map((t) => t.contracts));
@@ -287,6 +317,8 @@ export function computePortfolio(ds: Dataset, asOf = todayISO()): Portfolio {
     mtm,
     unrealized,
     capitalBase,
+    capitalEstimated,
+    hasSpy,
     returnPct,
     mtmReturnPct: mtm / capitalBase,
     annualizedReturn,

@@ -70,8 +70,13 @@ export default function Dashboard() {
           label={`Realized P&L · ${tf}`}
           value={signed(tfRealized)}
           tone={tfRealized >= 0 ? "pos" : "neg"}
-          sub={`${pct(p.returnPct)} on $${usd0(p.capitalBase).slice(1)} capital · all-time`}
-          hint="Premium collected minus buybacks (cash basis). Matches your workbook's realized number."
+          sub={`${pct(p.returnPct)} on $${usd0(p.capitalBase).slice(1)} capital${p.capitalEstimated ? " (est.)" : ""} · all-time`}
+          hint={
+            "Premium collected minus buybacks (cash basis). Matches your workbook's realized number." +
+            (p.capitalEstimated
+              ? " Capital base is estimated from peak put collateral — set your real capital on the Data page."
+              : "")
+          }
         />
         <Kpi
           label="Win Rate"
@@ -89,9 +94,13 @@ export default function Dashboard() {
         />
         <Kpi
           label="Alpha vs SPY"
-          value={(p.alpha >= 0 ? "+" : "") + pct(p.alpha, 1).replace("+", "")}
-          tone={p.alpha >= 0 ? "pos" : "neg"}
-          sub={`You ${pct(p.returnPct, 1)} · SPY ${pct(p.spyReturn, 1)} YoY`}
+          value={p.hasSpy ? (p.alpha >= 0 ? "+" : "") + pct(p.alpha, 1).replace("+", "") : "—"}
+          tone={p.hasSpy ? (p.alpha >= 0 ? "pos" : "neg") : "neutral"}
+          sub={
+            p.hasSpy
+              ? `You ${pct(p.returnPct, 1)} · SPY ${pct(p.spyReturn, 1)} YoY`
+              : "Set the SPY benchmark on the Data page to compare"
+          }
           hint="Your realized return minus SPY's trailing-12-month total return."
         />
       </div>

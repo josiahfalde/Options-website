@@ -1,5 +1,6 @@
 import * as XLSX from "xlsx";
 import type { Dataset, Trade, TradeAction } from "../types";
+import { estimateCapitalBase } from "./compute";
 
 // Mirrors tools/export_workbook.py — parses the per-company "<TICKER> Wheel"
 // sheets straight in the browser so you can drag-drop your workbook to refresh.
@@ -204,11 +205,10 @@ export function parseFidelityCsv(text: string): CsvImport {
   }
 
   const trades: Trade[] = [];
-  const collatDeltas: { date: string; d: number }[] = []; // for capital-base estimate
   let tid = 0;
   for (const evs of byContract.values()) {
     evs.sort((a, b) => a.date.localeCompare(b.date));
-    const openSells: { trade: Trade; collateral: number; closeDate?: string }[] = [];
+    const openSells: Trade[] = [];
     for (const e of evs) {
       if (e.kind === "sell") {
         const t: Trade = {
@@ -225,16 +225,12 @@ export function parseFidelityCsv(text: string): CsvImport {
           invested: null,
         };
         trades.push(t);
-        // Only cash-secured puts tie up cash collateral.
-        const collateral = e.type === "P" && e.strike ? e.strike * e.shares : 0;
-        openSells.push({ trade: t, collateral });
-        if (collateral) collatDeltas.push({ date: e.date, d: collateral });
+        openSells.push(t);
       } else {
         const open = openSells.shift(); // FIFO: close the oldest open leg
-        if (open?.collateral) collatDeltas.push({ date: e.date, d: -open.collateral });
 
         if (e.kind === "buy") {
-          if (open) open.trade.status = "Closed";
+          if (open) open.status = "Closed";
           trades.push({
             id: `fid-${tid++}`,
             ticker: e.ticker,
@@ -249,9 +245,9 @@ export function parseFidelityCsv(text: string): CsvImport {
             invested: null,
           });
         } else if (e.kind === "expired") {
-          if (open) open.trade.status = "Expired";
+          if (open) open.status = "Expired";
         } else if (e.kind === "assigned") {
-          if (open) open.trade.status = "Assigned";
+          if (open) open.status = "Assigned";
           // A put assignment buys shares at the strike; a call assignment sells
           // shares away (handled via the CC's "Assigned" status in compute.ts).
           if (e.type === "P" && e.strike) {
@@ -276,15 +272,9 @@ export function parseFidelityCsv(text: string): CsvImport {
 
   trades.sort((a, b) => a.date.localeCompare(b.date) || a.ticker.localeCompare(b.ticker));
 
-  // 3. Estimate a capital base = the peak CSP collateral ever committed at once.
-  collatDeltas.sort((a, b) => a.date.localeCompare(b.date));
-  let running = 0;
-  let peak = 0;
-  for (const { d } of collatDeltas) {
-    running += d;
-    if (running > peak) peak = running;
-  }
-  return { trades, suggestedCapitalBase: Math.round(peak) };
+  // Suggest a capital base using the same estimator the dashboard falls back to,
+  // so the import toast and the dashboard always agree.
+  return { trades, suggestedCapitalBase: estimateCapitalBase(trades) };
 }
 
 // Fallback when the symbol column is blank: pull contract from the description,
