@@ -219,14 +219,46 @@ export function allClosedPositions(ds: Dataset): ClosedPosition[] {
 // balance), estimate one from the trades: the peak cash-secured-put collateral
 // committed at any one time (Σ strike×shares of puts open simultaneously). A
 // sound denominator for yield-on-capital — far better than the $1 fallback.
+//
+// A put's collateral is freed when the put is *actually closed* — bought back or
+// assigned — which for an active roller is usually weeks before expiry. Releasing
+// only at expiry double-counts cash that was already redeployed and badly
+// overstates the peak (e.g. a put bought back early still "holding" collateral
+// alongside its replacement). So we release each put on its real close date,
+// falling back to expiry only when no close is recorded (expired / still open).
 export function estimateCapitalBase(trades: Trade[]): number {
+  // FIFO queue of close dates per contract, from buybacks + assignments.
+  const keyOf = (t: Trade) => `${t.ticker}|${t.expiry ?? ""}|${t.strike ?? ""}`;
+  const closesByKey = new Map<string, string[]>();
+  for (const t of trades) {
+    if (t.action !== "BB" && t.action !== "AAssignSTK") continue;
+    const k = keyOf(t);
+    (closesByKey.get(k) ?? closesByKey.set(k, []).get(k)!).push(t.date);
+  }
+  for (const arr of closesByKey.values()) arr.sort();
+
+  // Latest activity in the set — open puts stay collateralized through "now".
+  let asOf = "";
+  for (const t of trades) if (t.date > asOf) asOf = t.date;
+
+  const expiryEnd = (t: Trade) => (t.expiry && t.expiry > t.date ? t.expiry : t.date);
+
   const pts: { d: string; a: number }[] = [];
   for (const t of trades) {
     if (t.action !== "CSP" || !t.strike) continue;
     const collateral = t.strike * t.shares;
-    const end = t.expiry && t.expiry > t.date ? t.expiry : t.date;
+    let end: string;
+    if (t.status === "Closed" || t.status === "Assigned") {
+      // Match the next recorded close for this contract; fall back to expiry.
+      end = closesByKey.get(keyOf(t))?.shift() ?? expiryEnd(t);
+    } else if (t.status === "Open") {
+      end = asOf > t.date ? asOf : t.date; // never released — held to present
+    } else {
+      end = expiryEnd(t); // Expired (or unknown) — collateral held to expiry
+    }
+    if (end < t.date) end = t.date;
     pts.push({ d: t.date, a: collateral }); // collateral committed
-    pts.push({ d: end, a: -collateral }); // released at/by expiry
+    pts.push({ d: end, a: -collateral }); // released when actually closed
   }
   if (!pts.length) return 0;
   // Release (−) before open (+) on the same day so a same-day roll isn't double-counted.
