@@ -14,6 +14,7 @@ import { BRAND } from "../brand";
 import { useStore } from "../data/store";
 import { AuthButton } from "../auth/AuthButton";
 import { DemoBanner } from "../auth/DemoBanner";
+import { ThemeToggle } from "./ThemeToggle";
 
 const NAV = [
   { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
@@ -56,6 +57,9 @@ export function Layout({ children }: { children: ReactNode }) {
         <div className="mt-4 border-t border-white/5 pt-4">
           <AuthButton />
         </div>
+        <div className="mt-3">
+          <ThemeToggle />
+        </div>
         <div className="mt-3 px-2 text-[10px] text-slate-500">
           Local-first · your data stays in this browser
         </div>
@@ -65,7 +69,8 @@ export function Layout({ children }: { children: ReactNode }) {
       <div className="flex min-w-0 flex-1 flex-col">
         <header className="sticky top-0 z-20 flex items-center gap-3 border-b border-white/5 bg-ink-950/80 px-4 py-3 backdrop-blur md:hidden">
           <Brand compact />
-          <div className="ml-auto">
+          <div className="ml-auto flex items-center gap-1">
+            <ThemeToggle compact />
             <AuthButton compact />
           </div>
         </header>
