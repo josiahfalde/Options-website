@@ -6,7 +6,7 @@
 > Claude Code session resuming this project: read this file top to bottom first,
 > then open the Linear project for the live task board.**
 >
-> _Last updated: 2026-06-05 (end of Phase 1)._
+> _Last updated: 2026-06-10 (Phase 2 complete: auth, Google OAuth, cloud test)._
 
 ---
 
@@ -76,31 +76,43 @@ settings row on signup. Apply with `supabase db push`.
 
 ## 4. Status — what's DONE vs TODO
 
-### ✅ Done (Phase 1)
+### ✅ Done (Phase 1 + Phase 2)
 - **Supabase backend live & verified.** Schema + RLS applied; verified anonymous REST
-  reads return `[]` (no cross-user leak). (Linear JF-5)
+  reads return `[]` (no cross-user leak). (JF-5)
 - **Dual-mode data layer built & committed.** Demo/cloud adapter, builds + typechecks
-  clean. (Linear JF-6, commit `746eaa8`)
+  clean. (JF-6, commit `746eaa8`)
+- **Auth UI** — signup / login / reset modal, portaled & centered. (JF-7)
+- **Google sign-in (OAuth)** — "Continue with Google" button wired to `signInWithGoogle`;
+  Google Cloud OAuth client created + Google provider enabled in Supabase + redirect URLs
+  whitelisted. Verified working end-to-end on 2026-06-10. (JF-8, commit `3991b52`)
+- **Route protection + account menu + demo banner + account settings.** (JF-9)
+- **End-to-end cloud test PASSED** — DB/RLS proven (15/15: signup trigger, insert/fetch
+  persists, RLS blocks all cross-user read/update/delete/spoof) + full UI flow (login →
+  add trade via UI → row confirmed in Postgres → survives reload). (JF-10)
+- **Fidelity CSV import fix** — parse expiry/strike, resolve statuses, estimate capital
+  base. (JF-21) Plus a follow-up: the capital-base estimator now releases CSP collateral
+  on the **actual** buyback/assignment date, not expiry, so the peak isn't overstated
+  (a real CSV went from a bogus $6,800 to a correct ~$2,650). (commit `31d6d85`)
+- **Capital-base override** made discoverable as an inline editor on the Dashboard. (`e574aa1`)
+- **Light mode + theme toggle** — Tailwind class strategy + CSS-variable tokens; dark
+  stays default & identical. (PR #5, `7113824`)
 
 ### ⬜ TODO (in order)
 | Linear | Work |
 |--------|------|
-| **JF-7**  | Auth UI: signup/login/reset forms |
-| JF-8  | Google sign-in (needs Google OAuth creds — see §6 problems) |
-| JF-9  | Route protection + account menu + "viewing demo — sign in to save" banner + account settings page |
-| JF-10 | **End-to-end cloud test** (first real runtime test: signup → add trade → confirm row in Postgres → reload → persists; verify 2 users can't see each other's data) |
-| JF-11 | Migrate hosting to Vercel (serverless for webhook/OAuth) |
+| **JF-11** | **Migrate hosting to Vercel** (serverless for webhook/OAuth) — next, and blocks billing |
 | JF-12 | Stripe: account + define Free/Pro plans + what's gated |
 | JF-13 | Stripe Checkout + Customer Portal |
 | JF-14 | Stripe webhook (signature-verified, idempotent) + entitlement gating |
 | JF-15 | Not-financial-advice disclaimer (high priority for a finance app) |
 | JF-16 | Terms of Service + Privacy Policy |
 | JF-17 | Business entity + Stripe Tax |
-| JF-18 | Final brand name + domain + HTTPS |
+| JF-18 | Final brand name + domain + HTTPS (see §6 for the domain checklist) |
 | JF-19 | Monitoring (Sentry) + analytics |
 | JF-20 | Launch: live-mode Stripe test + go live |
 
-**NEXT STEP: JF-7 (Auth UI).** It unlocks the first real cloud runtime test (JF-10).
+**NEXT STEP: JF-11 (migrate hosting to Vercel).** Phase 2 is done; billing (Phase 3)
+cannot ship on GitHub Pages, so Vercel is the gate before any Stripe work.
 
 ---
 
@@ -135,9 +147,27 @@ starts and let PR-merge (or a manual `issueUpdate`) move it to Done.
 - **Cloud read/write is NOT yet runtime-tested.** The dual-mode layer compiles and RLS
   is verified at the DB level, but no login UI exists yet to create a session — so the
   cloud insert/update/delete paths have never actually run. First real test is JF-10.
-- **Google sign-in needs user action:** create a Google Cloud OAuth client (ID+secret)
-  and paste into Supabase dashboard → Authentication → Providers → Google, plus set the
-  authorized redirect URLs. Build/test the email path first.
+- **Google sign-in is DONE** (JF-8, 2026-06-10). Google Cloud OAuth client + Supabase
+  Google provider enabled + redirect URLs whitelisted. Current config:
+  - Google Cloud OAuth client (project "Flywheel", consent screen in **Testing** mode —
+    only listed test users can log in until it's **Published**).
+    - Authorized JS origins: `http://localhost:5173`, `https://josiahfalde.github.io`
+    - Authorized redirect URI: `https://wdzdtnrmdxgyoxuaqpbp.supabase.co/auth/v1/callback`
+  - Supabase → Auth → URL Configuration: Site URL `https://josiahfalde.github.io/Options-website/`;
+    redirect allow-list `http://localhost:5173/**` + `https://josiahfalde.github.io/Options-website/**`.
+- **DOMAIN CHECKLIST (JF-18)** — when a custom domain (e.g. `flywheel.app`) is purchased,
+  these must ALL be updated or Google login + redirects break. Order matters:
+  1. **Hosting:** point the domain at the host (GitHub Pages: add a `CNAME` file + DNS;
+     Vercel after JF-11: add the domain in the Vercel dashboard + its DNS records). Enable HTTPS.
+  2. **Google Cloud → Credentials → the OAuth client:** add the new origin to
+     *Authorized JavaScript origins* (e.g. `https://flywheel.app`). The redirect URI stays
+     the Supabase `…/auth/v1/callback` — do NOT change it.
+  3. **Google Cloud → OAuth consent screen:** **Publish** the app (move out of Testing) so
+     anyone — not just listed test users — can sign in.
+  4. **Supabase → Auth → URL Configuration:** change Site URL to `https://flywheel.app/`
+     and add `https://flywheel.app/**` to the redirect allow-list.
+  5. **App:** if NOT using HashRouter at a subpath anymore (root domain), the relative
+     `base: "./"` still works; just confirm `redirectTo` resolves to the new origin.
 - **Hosting blocker:** billing (Phase 3) cannot ship on GitHub Pages. Move to Vercel
   (JF-11) before JF-14.
 - **Stripe webhook is the trickiest piece** (JF-14): must be signature-verified and
