@@ -6,6 +6,31 @@ import { BRAND } from "../brand";
 
 type Mode = "login" | "signup" | "reset";
 
+// Official Google "G" mark (4-color), rendered inline since lucide-react
+// doesn't ship a brand logo.
+function GoogleG({ size = 18 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 18 18" aria-hidden="true">
+      <path
+        fill="#4285F4"
+        d="M17.64 9.205c0-.639-.057-1.252-.164-1.841H9v3.481h4.844a4.14 4.14 0 0 1-1.796 2.716v2.259h2.908c1.702-1.567 2.684-3.875 2.684-6.615z"
+      />
+      <path
+        fill="#34A853"
+        d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 0 0 9 18z"
+      />
+      <path
+        fill="#FBBC05"
+        d="M3.964 10.71A5.41 5.41 0 0 1 3.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.997 8.997 0 0 0 0 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"
+      />
+      <path
+        fill="#EA4335"
+        d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 0 0 .957 4.958L3.964 7.29C4.672 5.163 6.656 3.58 9 3.58z"
+      />
+    </svg>
+  );
+}
+
 const COPY: Record<Mode, { title: string; cta: string; sub: string }> = {
   login: { title: "Welcome back", cta: "Sign in", sub: "Sign in to sync and save your trades." },
   signup: {
@@ -29,7 +54,7 @@ export function AuthModal({
   onClose: () => void;
   initialMode?: Mode;
 }) {
-  const { user, signUp, signInWithPassword, resetPassword } = useAuth();
+  const { user, signUp, signInWithPassword, resetPassword, signInWithGoogle } = useAuth();
   const [mode, setMode] = useState<Mode>(initialMode);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -97,6 +122,17 @@ export function AuthModal({
       setInfo("Account created. Check your email to confirm, then sign in.");
     }
     // login success closes via the `user` effect.
+  }
+
+  async function google() {
+    setBusy(true);
+    setError(null);
+    setInfo(null);
+    const { error } = await signInWithGoogle();
+    // On success the browser redirects to Google, so this component unmounts
+    // and we never reach here. We only land here on failure.
+    setBusy(false);
+    if (error) setError(error);
   }
 
   // Portal to <body> so the overlay escapes the sidebar's backdrop-filter
@@ -178,6 +214,32 @@ export function AuthModal({
             {busy && <Loader2 size={16} className="animate-spin" />}
             {copy.cta}
           </button>
+
+          {mode !== "reset" && (
+            <>
+              <div className="my-1 flex items-center gap-3" aria-hidden="true">
+                <span className="h-px flex-1 bg-white/10" />
+                <span className="text-[11px] font-medium uppercase tracking-wider text-slate-500">
+                  or
+                </span>
+                <span className="h-px flex-1 bg-white/10" />
+              </div>
+
+              <button
+                type="button"
+                onClick={google}
+                disabled={busy}
+                className="flex w-full items-center justify-center gap-2.5 rounded-lg border border-white/15 bg-white/5 px-4 py-2.5 text-sm font-semibold text-slate-100 transition hover:bg-white/10 active:bg-white/[0.07] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-flux-500/60 disabled:cursor-not-allowed disabled:opacity-60"
+              >
+                {busy ? (
+                  <Loader2 size={16} className="animate-spin" />
+                ) : (
+                  <GoogleG size={18} />
+                )}
+                Continue with Google
+              </button>
+            </>
+          )}
         </form>
 
         <div className="mt-4 flex flex-col gap-1 text-center text-xs text-slate-400">
