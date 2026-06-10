@@ -1,18 +1,38 @@
 /** @type {import('tailwindcss').Config} */
+
+// Helper: a color backed by a CSS variable holding "R G B" channels, so the
+// same Tailwind utility (e.g. bg-ink-850, text-slate-400, border-white/10)
+// resolves to a theme-aware value and still honours the /alpha modifier.
+const v = (name) => `rgb(var(${name}) / <alpha-value>)`;
+
 export default {
+  darkMode: "class",
   content: ["./index.html", "./src/**/*.{ts,tsx}"],
   theme: {
     extend: {
       colors: {
-        // Slate-forward dark canvas
+        // Neutral "ink" surfaces + "slate" text + the overlay "white" are all
+        // driven by CSS variables defined per-theme in index.css, so the
+        // existing dark-mode classes keep their exact values and automatically
+        // flip in light mode without per-component rewrites.
+        white: v("--c-white"),
         ink: {
-          950: "#080b12",
-          900: "#0b1018",
-          850: "#0f1623",
-          800: "#141c2b",
-          750: "#1a2436",
-          700: "#222e44",
-          600: "#2d3b56",
+          950: v("--c-ink-950"),
+          900: v("--c-ink-900"),
+          850: v("--c-ink-850"),
+          800: v("--c-ink-800"),
+          750: v("--c-ink-750"),
+          700: v("--c-ink-700"),
+          600: v("--c-ink-600"),
+        },
+        slate: {
+          50: v("--c-slate-50"),
+          100: v("--c-slate-100"),
+          200: v("--c-slate-200"),
+          300: v("--c-slate-300"),
+          400: v("--c-slate-400"),
+          500: v("--c-slate-500"),
+          600: v("--c-slate-600"),
         },
         // Premium = green; the Wheel keeps turning
         flux: {
@@ -40,7 +60,7 @@ export default {
       },
       boxShadow: {
         glow: "0 0 0 1px rgba(16,185,129,0.15), 0 8px 30px -8px rgba(16,185,129,0.25)",
-        card: "0 1px 0 0 rgba(255,255,255,0.04) inset, 0 10px 30px -12px rgba(0,0,0,0.6)",
+        card: "var(--shadow-card)",
       },
       keyframes: {
         "fade-up": {

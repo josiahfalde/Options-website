@@ -16,9 +16,11 @@ import { useStore } from "../data/store";
 import { strategyStats, allClosedPositions, computePortfolio } from "../data/compute";
 import { Card, Pill, SectionTitle } from "../components/ui";
 import { usd, signed, pct, fmtDate, cls, posneg } from "../lib/format";
+import { useChartTheme } from "../lib/theme";
 
 export default function Insights() {
   const { dataset } = useStore();
+  const ct = useChartTheme();
   const strat = useMemo(() => strategyStats(dataset), [dataset]);
   const closed = useMemo(() => allClosedPositions(dataset), [dataset]);
   const p = useMemo(() => computePortfolio(dataset), [dataset]);
@@ -92,11 +94,11 @@ export default function Insights() {
           <div className="h-56">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={buckets} margin={{ left: -22, right: 8, top: 8, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
-                <XAxis dataKey="label" tick={{ fill: "#64748b", fontSize: 11 }} axisLine={false} tickLine={false} />
-                <YAxis tick={{ fill: "#64748b", fontSize: 11 }} axisLine={false} tickLine={false} width={28} />
+                <CartesianGrid strokeDasharray="3 3" stroke={ct.grid} vertical={false} />
+                <XAxis dataKey="label" tick={{ fill: ct.axis, fontSize: 11 }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fill: ct.axis, fontSize: 11 }} axisLine={false} tickLine={false} width={28} />
                 <Tooltip
-                  cursor={{ fill: "#ffffff08" }}
+                  cursor={{ fill: ct.cursor }}
                   content={({ active, payload, label }: any) =>
                     active && payload?.length ? (
                       <div className="rounded-lg border border-white/10 bg-ink-800/95 px-3 py-2 text-xs shadow-xl">

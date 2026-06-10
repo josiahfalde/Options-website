@@ -2,8 +2,85 @@
 @tailwind components;
 @tailwind utilities;
 
-:root {
+/* ------------------------------------------------------------------ */
+/* Theme tokens. The neutral palette (ink surfaces, slate text, the    */
+/* "white" overlay used for borders/dividers) is expressed as "R G B"  */
+/* channels so Tailwind utilities like bg-ink-850 / text-slate-400 /   */
+/* border-white/10 resolve per-theme and still support /alpha.         */
+/* DARK is the default and keeps the original hex values exactly.      */
+/* ------------------------------------------------------------------ */
+.dark {
   color-scheme: dark;
+
+  --c-white: 255 255 255;
+
+  --c-ink-950: 8 11 18;
+  --c-ink-900: 11 16 24;
+  --c-ink-850: 15 22 35;
+  --c-ink-800: 20 28 43;
+  --c-ink-750: 26 36 54;
+  --c-ink-700: 34 46 68;
+  --c-ink-600: 45 59 86;
+
+  --c-slate-50: 248 250 252;
+  --c-slate-100: 241 245 249;
+  --c-slate-200: 226 232 240;
+  --c-slate-300: 203 213 225;
+  --c-slate-400: 148 163 184;
+  --c-slate-500: 100 116 139;
+  --c-slate-600: 71 85 105;
+
+  --shadow-card: 0 1px 0 0 rgba(255, 255, 255, 0.04) inset,
+    0 10px 30px -12px rgba(0, 0, 0, 0.6);
+
+  --bg-glow-1: rgba(16, 185, 129, 0.08);
+  --bg-glow-2: rgba(245, 158, 11, 0.05);
+  --scrollbar-thumb: #2d3b56;
+
+  /* Chart tokens consumed by useChartTheme() */
+  --chart-axis: #64748b;
+  --chart-grid: #ffffff10;
+  --chart-cursor: #ffffff08;
+}
+
+.light {
+  color-scheme: light;
+
+  /* The overlay "white" becomes a dark slate so white/10-style dividers,
+     fills and hover states remain visible against light surfaces. */
+  --c-white: 15 23 42;
+
+  /* Surfaces: page is a soft slate wash, cards/inputs lift toward pure white.
+     Ordered so "deeper" ink steps map to subtly darker neutrals, preserving
+     the depth relationships the dark UI relies on. */
+  --c-ink-950: 241 245 249; /* page canvas */
+  --c-ink-900: 248 250 252; /* inputs / inset panels */
+  --c-ink-850: 255 255 255; /* cards / popovers */
+  --c-ink-800: 255 255 255; /* tooltip / raised */
+  --c-ink-750: 248 250 252;
+  --c-ink-700: 241 245 249;
+  --c-ink-600: 226 232 240;
+
+  /* Text: invert the ramp so slate-400 (muted) stays muted and slate-100
+     (near-white headings) becomes near-black headings. */
+  --c-slate-50: 15 23 42; /* strongest heading */
+  --c-slate-100: 15 23 42;
+  --c-slate-200: 30 41 59;
+  --c-slate-300: 51 65 85;
+  --c-slate-400: 71 85 105; /* muted body */
+  --c-slate-500: 100 116 139; /* faint */
+  --c-slate-600: 148 163 184; /* faintest */
+
+  --shadow-card: 0 1px 2px 0 rgba(15, 23, 42, 0.06),
+    0 10px 28px -14px rgba(15, 23, 42, 0.18);
+
+  --bg-glow-1: rgba(16, 185, 129, 0.1);
+  --bg-glow-2: rgba(245, 158, 11, 0.08);
+  --scrollbar-thumb: #cbd5e1;
+
+  --chart-axis: #64748b;
+  --chart-grid: #0f172a14;
+  --chart-cursor: #0f172a0a;
 }
 
 html,
@@ -15,22 +92,22 @@ body,
 body {
   @apply bg-ink-950 text-slate-200 font-sans antialiased;
   background-image:
-    radial-gradient(900px 500px at 12% -8%, rgba(16, 185, 129, 0.08), transparent 60%),
-    radial-gradient(700px 480px at 100% 0%, rgba(245, 158, 11, 0.05), transparent 55%);
+    radial-gradient(900px 500px at 12% -8%, var(--bg-glow-1), transparent 60%),
+    radial-gradient(700px 480px at 100% 0%, var(--bg-glow-2), transparent 55%);
   background-attachment: fixed;
 }
 
-/* Thin, dark scrollbars */
+/* Thin, theme-aware scrollbars */
 * {
   scrollbar-width: thin;
-  scrollbar-color: #2d3b56 transparent;
+  scrollbar-color: var(--scrollbar-thumb) transparent;
 }
 *::-webkit-scrollbar {
   width: 9px;
   height: 9px;
 }
 *::-webkit-scrollbar-thumb {
-  background: #2d3b56;
+  background: var(--scrollbar-thumb);
   border-radius: 9px;
 }
 
@@ -50,6 +127,11 @@ body {
   }
   .btn-primary {
     @apply btn bg-flux-500 text-ink-950 hover:bg-flux-400;
+  }
+  /* Keep the primary button's label dark on emerald in BOTH themes
+     (in light mode ink-950 resolves to a near-white that wouldn't read). */
+  .light .btn-primary {
+    @apply text-[#06281d];
   }
   .btn-ghost {
     @apply btn border border-white/10 text-slate-200 hover:bg-white/5;
@@ -84,4 +166,55 @@ body {
 }
 .neg {
   @apply text-loss-400;
+}
+
+/* ------------------------------------------------------------------ */
+/* Light-mode legibility tuning. The accent SCALE stays fixed so solid */
+/* fills (bg-flux-500, bg-loss-500, recharts) keep their vivid color,  */
+/* but the pale accent TEXT/icon shades (flux-200/300/400, etc.) are   */
+/* too light on white — darken just those text utilities here while    */
+/* keeping the green/amber/rose semantics intact.                      */
+/* ------------------------------------------------------------------ */
+.light {
+  /* Card & divider hairlines: the dark theme leans on white/5–white/10
+     borders which become nearly invisible once "white" is dark-on-light.
+     Lift card edges to a clear, soft slate line. */
+}
+.light .card {
+  @apply border-slate-200/80;
+}
+
+/* Positive / brand green text + icons */
+.light .text-flux-200,
+.light .text-flux-300,
+.light .text-flux-400,
+.light .pos {
+  color: #047857; /* flux-700 — readable green on light */
+}
+/* Negative / loss red text + icons */
+.light .text-loss-400,
+.light .text-loss-500,
+.light .neg {
+  color: #e11d48; /* rose-600 */
+}
+/* Capital / amber text + icons */
+.light .text-torque-200,
+.light .text-torque-300,
+.light .text-torque-400 {
+  color: #b45309; /* amber-700 — amber is unreadable as text on white */
+}
+/* Info / blue text */
+.light .text-sky-300 {
+  color: #0369a1; /* sky-700 */
+}
+
+/* Active nav pill: tint background a touch stronger so the active route
+   reads clearly against the light sidebar. */
+.light .nav-link-active {
+  @apply bg-flux-500/15 text-flux-700 ring-flux-500/30;
+}
+
+/* Demo banner amber text needs the darker amber too (uses torque-200). */
+.light .text-torque-200 {
+  color: #b45309;
 }

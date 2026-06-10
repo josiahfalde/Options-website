@@ -26,10 +26,12 @@ import { Card, Kpi, Pill, SectionTitle, Bar as MiniBar } from "../components/ui"
 import { CapitalBaseEditor } from "../components/CapitalBaseEditor";
 import { BRAND } from "../brand";
 import { usd, usd0, pct, signed, fmtMonth, fmtDate, posneg, cls } from "../lib/format";
+import { useChartTheme } from "../lib/theme";
 
 export default function Dashboard() {
   const { dataset, setCapitalBase } = useStore();
   const [tf, setTf] = useState<Timeframe>("ALL");
+  const ct = useChartTheme();
 
   const p = useMemo(() => computePortfolio(dataset), [dataset]);
   const curve = useMemo(() => cumulativeCurve(dataset), [dataset]);
@@ -132,17 +134,17 @@ export default function Dashboard() {
                     <stop offset="100%" stopColor="#10b981" stopOpacity={0} />
                   </linearGradient>
                 </defs>
-                <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke={ct.grid} vertical={false} />
                 <XAxis
                   dataKey="date"
-                  tick={{ fill: "#64748b", fontSize: 11 }}
+                  tick={{ fill: ct.axis, fontSize: 11 }}
                   tickFormatter={(d) => fmtMonth(String(d).slice(0, 7))}
                   minTickGap={36}
                   axisLine={false}
                   tickLine={false}
                 />
                 <YAxis
-                  tick={{ fill: "#64748b", fontSize: 11 }}
+                  tick={{ fill: ct.axis, fontSize: 11 }}
                   tickFormatter={(v) => "$" + v}
                   axisLine={false}
                   tickLine={false}
@@ -166,22 +168,22 @@ export default function Dashboard() {
           <div className="h-64">
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={months} margin={{ left: -20, right: 4, top: 6, bottom: 0 }}>
-                <CartesianGrid strokeDasharray="3 3" stroke="#ffffff10" vertical={false} />
+                <CartesianGrid strokeDasharray="3 3" stroke={ct.grid} vertical={false} />
                 <XAxis
                   dataKey="month"
-                  tick={{ fill: "#64748b", fontSize: 11 }}
+                  tick={{ fill: ct.axis, fontSize: 11 }}
                   tickFormatter={(m) => fmtMonth(String(m))}
                   axisLine={false}
                   tickLine={false}
                 />
                 <YAxis
-                  tick={{ fill: "#64748b", fontSize: 11 }}
+                  tick={{ fill: ct.axis, fontSize: 11 }}
                   tickFormatter={(v) => "$" + v}
                   axisLine={false}
                   tickLine={false}
                   width={46}
                 />
-                <Tooltip content={<ChartTip kind="money" labelFmt={(m: string) => fmtMonth(String(m))} />} cursor={{ fill: "#ffffff08" }} />
+                <Tooltip content={<ChartTip kind="money" labelFmt={(m: string) => fmtMonth(String(m))} />} cursor={{ fill: ct.cursor }} />
                 <Bar dataKey="pl" radius={[4, 4, 0, 0]}>
                   {months.map((m, i) => (
                     <Cell key={i} fill={m.pl >= 0 ? "#10b981" : "#f43f5e"} />
