@@ -23,11 +23,12 @@ import {
   type Timeframe,
 } from "../data/compute";
 import { Card, Kpi, Pill, SectionTitle, Bar as MiniBar } from "../components/ui";
+import { CapitalBaseEditor } from "../components/CapitalBaseEditor";
 import { BRAND } from "../brand";
 import { usd, usd0, pct, signed, fmtMonth, fmtDate, posneg, cls } from "../lib/format";
 
 export default function Dashboard() {
-  const { dataset } = useStore();
+  const { dataset, setCapitalBase } = useStore();
   const [tf, setTf] = useState<Timeframe>("ALL");
 
   const p = useMemo(() => computePortfolio(dataset), [dataset]);
@@ -70,13 +71,18 @@ export default function Dashboard() {
           label={`Realized P&L · ${tf}`}
           value={signed(tfRealized)}
           tone={tfRealized >= 0 ? "pos" : "neg"}
-          sub={`${pct(p.returnPct)} on $${usd0(p.capitalBase).slice(1)} capital${p.capitalEstimated ? " (est.)" : ""} · all-time`}
-          hint={
-            "Premium collected minus buybacks (cash basis). Matches your workbook's realized number." +
-            (p.capitalEstimated
-              ? " Capital base is estimated from peak put collateral — set your real capital on the Data page."
-              : "")
+          sub={
+            <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
+              <span>{pct(p.returnPct)} on</span>
+              <CapitalBaseEditor
+                capitalBase={p.capitalBase}
+                estimated={p.capitalEstimated}
+                onCommit={setCapitalBase}
+              />
+              <span>· all-time</span>
+            </span>
           }
+          hint="Premium collected minus buybacks (cash basis). Matches your workbook's realized number."
         />
         <Kpi
           label="Win Rate"
