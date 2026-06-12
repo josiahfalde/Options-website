@@ -45,8 +45,11 @@ their options trades, and track premium income, Wheel campaigns, and performance
 - **Frontend:** Vite + React + TypeScript + Tailwind + Recharts + SheetJS (xlsx).
 - **Backend:** Supabase (Postgres + Auth + Row-Level Security). Project ref
   `wdzdtnrmdxgyoxuaqpbp`, region `us-east-1`. **Separate** from the ParakaleoMMC backend.
-- **Hosting:** currently GitHub Pages (static). **Must move to Vercel/Cloudflare before
-  billing** — Stripe webhooks + OAuth redirects need serverless functions, which Pages can't host.
+- **Hosting:** **migrating to Vercel (JF-11, in progress).** Repo config is ready
+  (`vercel.json` + `docs/vercel-deploy.md`); the dashboard steps (import repo, set env
+  vars, whitelist the Vercel URL in Supabase + Google) are the user's to do. GitHub Pages
+  (`npm run deploy`) remains as fallback. Vercel is required before billing — Stripe
+  webhooks + OAuth redirects need serverless functions, which Pages can't host.
 - **Payments:** Stripe (planned, Phase 3).
 
 **Dual-mode data layer** — the core design. The app switches on auth state:
@@ -100,7 +103,7 @@ settings row on signup. Apply with `supabase db push`.
 ### ⬜ TODO (in order)
 | Linear | Work |
 |--------|------|
-| **JF-11** | **Migrate hosting to Vercel** (serverless for webhook/OAuth) — next, and blocks billing |
+| **JF-11** | **Migrate hosting to Vercel** — 🔧 _config ready (`vercel.json`, `docs/vercel-deploy.md`); awaiting user dashboard steps_ |
 | JF-12 | Stripe: account + define Free/Pro plans + what's gated |
 | JF-13 | Stripe Checkout + Customer Portal |
 | JF-14 | Stripe webhook (signature-verified, idempotent) + entitlement gating |
@@ -111,8 +114,10 @@ settings row on signup. Apply with `supabase db push`.
 | JF-19 | Monitoring (Sentry) + analytics |
 | JF-20 | Launch: live-mode Stripe test + go live |
 
-**NEXT STEP: JF-11 (migrate hosting to Vercel).** Phase 2 is done; billing (Phase 3)
-cannot ship on GitHub Pages, so Vercel is the gate before any Stripe work.
+**NEXT STEP: finish JF-11 (Vercel).** The repo is Vercel-ready; the user must run the
+dashboard steps in `docs/vercel-deploy.md` (import repo, set env vars, whitelist the
+Vercel URL in Supabase + Google), then verify auth on the live URL. After that, billing
+(Phase 3, JF-12 →) is unblocked.
 
 ---
 
