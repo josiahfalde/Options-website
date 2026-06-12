@@ -1,25 +1,31 @@
 import { useMemo, useState } from "react";
-import { Search, Trash2, ArrowUpDown } from "lucide-react";
+import { Search, Trash2, ArrowUpDown, StickyNote, BookOpen } from "lucide-react";
 import { useStore } from "../data/store";
 import { filterByTimeframe, TIMEFRAMES, type Timeframe, isCredit } from "../data/compute";
 import { Card, Pill } from "../components/ui";
+import { Drawer } from "../components/Drawer";
+import { NoteEditor } from "../components/NoteEditor";
 import { ActionPill } from "./Dashboard";
 import { usd, fmtDate, cls } from "../lib/format";
+import { hasJournalNote, parseNote } from "../lib/notes";
 import type { Trade } from "../types";
 
 type SortKey = "date" | "ticker" | "amount";
 
 export default function Trades() {
-  const { dataset, deleteTrade } = useStore();
+  const { dataset, updateTrade, deleteTrade } = useStore();
   const [tf, setTf] = useState<Timeframe>("ALL");
   const [q, setQ] = useState("");
   const [strat, setStrat] = useState<string>("ALL");
+  const [notesOnly, setNotesOnly] = useState(false);
   const [sort, setSort] = useState<SortKey>("date");
   const [dir, setDir] = useState<1 | -1>(-1);
+  const [openId, setOpenId] = useState<string | null>(null);
 
   const rows = useMemo(() => {
     let t = filterByTimeframe(dataset.trades, tf);
     if (strat !== "ALL") t = t.filter((x) => x.action === strat);
+    if (notesOnly) t = t.filter((x) => hasJournalNote(x.note));
     if (q.trim()) {
       const s = q.trim().toUpperCase();
       t = t.filter((x) => x.ticker.includes(s) || x.action.includes(s));
@@ -31,10 +37,14 @@ export default function Trades() {
       else r = a.amount - b.amount;
       return r * dir;
     });
-  }, [dataset.trades, tf, strat, q, sort, dir]);
+  }, [dataset.trades, tf, strat, notesOnly, q, sort, dir]);
 
   const credits = rows.filter(isCredit).reduce((a, t) => a + t.amount, 0);
   const debits = rows.filter((t) => !isCredit(t)).reduce((a, t) => a + t.amount, 0);
+  const notedCount = useMemo(
+    () => dataset.trades.filter((t) => hasJournalNote(t.note)).length,
+    [dataset.trades]
+  );
 
   const toggleSort = (k: SortKey) => {
     if (sort === k) setDir((d) => (d === 1 ? -1 : 1));
@@ -43,6 +53,8 @@ export default function Trades() {
       setDir(-1);
     }
   };
+
+  const openTrade = openId ? dataset.trades.find((t) => t.id === openId) : undefined;
 
   return (
     <div className="space-y-5">
@@ -73,6 +85,30 @@ export default function Trades() {
             <option value="BB">Buyback</option>
             <option value="AAssignSTK">Assignment</option>
           </select>
+          <button
+            onClick={() => setNotesOnly((v) => !v)}
+            aria-pressed={notesOnly}
+            className={cls(
+              "btn h-[38px] gap-1.5 border text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-flux-500/40",
+              notesOnly
+                ? "border-flux-500/40 bg-flux-500/10 text-flux-300"
+                : "border-white/10 text-slate-300 hover:bg-white/5"
+            )}
+            title="Show only trades you've journaled"
+          >
+            <BookOpen size={15} />
+            Journal
+            {notedCount > 0 && (
+              <span
+                className={cls(
+                  "num rounded-full px-1.5 text-[11px]",
+                  notesOnly ? "bg-flux-500/20" : "bg-white/10 text-slate-400"
+                )}
+              >
+                {notedCount}
+              </span>
+            )}
+          </button>
           <div className="flex items-center gap-1 rounded-xl border border-white/5 bg-ink-900/60 p-1">
             {TIMEFRAMES.map((t) => (
               <button
@@ -107,12 +143,19 @@ export default function Trades() {
             </thead>
             <tbody className="divide-y divide-white/[0.04]">
               {rows.map((t) => (
-                <Row key={t.id} t={t} onDelete={() => deleteTrade(t.id)} />
+                <Row
+                  key={t.id}
+                  t={t}
+                  onOpen={() => setOpenId(t.id)}
+                  onDelete={() => deleteTrade(t.id)}
+                />
               ))}
               {rows.length === 0 && (
                 <tr>
                   <td colSpan={7} className="px-4 py-12 text-center text-sm text-slate-500">
-                    No trades match these filters.
+                    {notesOnly
+                      ? "No journaled trades match these filters. Open any trade to add a note."
+                      : "No trades match these filters."}
                   </td>
                 </tr>
               )}
@@ -120,8 +163,34 @@ export default function Trades() {
           </table>
         </div>
       </Card>
+
+      {/* Trade detail / journal drawer */}
+      <Drawer
+        open={!!openTrade}
+        onClose={() => setOpenId(null)}
+        title={openTrade ? `${openTrade.ticker} · ${fmtDate(openTrade.date)}` : ""}
+        sub={openTrade ? actionLabel(openTrade.action) : ""}
+      >
+        {openTrade && (
+          <TradeDetail
+            t={openTrade}
+            onSaveNote={(note) => updateTrade(openTrade.id, { note })}
+          />
+        )}
+      </Drawer>
     </div>
   );
+}
+
+function actionLabel(a: string): string {
+  return (
+    {
+      CSP: "Cash-secured put",
+      CC: "Covered call",
+      BB: "Buyback",
+      AAssignSTK: "Assignment",
+    } as Record<string, string>
+  )[a] ?? a;
 }
 
 function Th({
@@ -145,14 +214,32 @@ function Th({
   );
 }
 
-function Row({ t, onDelete }: { t: Trade; onDelete: () => void }) {
+function Row({ t, onOpen, onDelete }: { t: Trade; onOpen: () => void; onDelete: () => void }) {
   const credit = t.side === "credit";
+  const noted = hasJournalNote(t.note);
   const statusTone: any =
     t.status === "Assigned" ? "gold" : t.status === "Open" ? "blue" : t.status ? "slate" : "slate";
   return (
-    <tr className="group hover:bg-white/[0.025]">
+    <tr
+      className="group cursor-pointer hover:bg-white/[0.025]"
+      onClick={onOpen}
+      tabIndex={0}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpen();
+        }
+      }}
+    >
       <td className="td whitespace-nowrap text-slate-400">{fmtDate(t.date)}</td>
-      <td className="td font-semibold text-slate-100">{t.ticker}</td>
+      <td className="td font-semibold text-slate-100">
+        <span className="inline-flex items-center gap-1.5">
+          {t.ticker}
+          {noted && (
+            <StickyNote size={13} className="text-flux-400" aria-label="Has a journal note" />
+          )}
+        </span>
+      </td>
       <td className="td"><ActionPill action={t.action} /></td>
       <td className="td">
         {t.status ? <Pill tone={statusTone}>{t.status}</Pill> : <span className="text-slate-600">—</span>}
@@ -164,13 +251,68 @@ function Row({ t, onDelete }: { t: Trade; onDelete: () => void }) {
       </td>
       <td className="td text-right">
         <button
-          onClick={onDelete}
-          className="text-slate-600 opacity-0 transition group-hover:opacity-100 hover:text-loss-400"
+          onClick={(e) => {
+            e.stopPropagation();
+            onDelete();
+          }}
+          className="text-slate-600 opacity-0 transition group-hover:opacity-100 hover:text-loss-400 focus-visible:opacity-100 focus-visible:outline-none"
           title="Delete trade"
+          aria-label="Delete trade"
         >
           <Trash2 size={15} />
         </button>
       </td>
     </tr>
+  );
+}
+
+function TradeDetail({ t, onSaveNote }: { t: Trade; onSaveNote: (note: string | null) => void }) {
+  const credit = t.side === "credit";
+  const earn = parseNote(t.note).earn;
+  return (
+    <div className="space-y-5">
+      {/* facts grid */}
+      <div className="grid grid-cols-2 gap-2">
+        <Fact label="Amount" value={(credit ? "+" : "−") + usd(t.amount)} tone={credit ? "pos" : "neg"} />
+        <Fact label="Shares" value={String(t.shares)} />
+        {t.strike != null && <Fact label="Strike" value={"$" + t.strike} />}
+        {t.expiry && <Fact label="Expiry" value={fmtDate(t.expiry)} />}
+        {t.invested != null && <Fact label="Invested" value={usd(t.invested)} tone="gold" />}
+        {t.status && <Fact label="Status" value={t.status} />}
+      </div>
+
+      {earn && (
+        <div className="rounded-xl border border-torque-500/20 bg-torque-500/5 px-3 py-2 text-xs text-torque-300">
+          Earnings flagged for <span className="num font-semibold">{fmtDate(earn)}</span> (set on the
+          Earnings Radar). Editing the note below keeps this flag intact.
+        </div>
+      )}
+
+      {/* journal note */}
+      <div>
+        <div className="stat-label mb-2 flex items-center gap-1.5">
+          <StickyNote size={13} className="text-flux-400" />
+          Journal note
+        </div>
+        <NoteEditor trade={t} onSave={onSaveNote} />
+      </div>
+    </div>
+  );
+}
+
+function Fact({ label, value, tone }: { label: string; value: string; tone?: "pos" | "neg" | "gold" }) {
+  const toneCls =
+    tone === "pos"
+      ? "text-flux-400"
+      : tone === "neg"
+      ? "text-loss-400"
+      : tone === "gold"
+      ? "text-torque-400"
+      : "text-slate-100";
+  return (
+    <div className="rounded-xl bg-white/[0.03] p-3">
+      <div className="text-[10px] uppercase tracking-wide text-slate-500">{label}</div>
+      <div className={cls("num mt-0.5 text-sm font-bold", toneCls)}>{value}</div>
+    </div>
   );
 }

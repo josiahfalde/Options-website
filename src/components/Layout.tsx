@@ -5,6 +5,7 @@ import {
   CircleDashed,
   Calculator,
   Radar,
+  CalendarDays,
   Lightbulb,
   Upload,
   Cog,
@@ -22,6 +23,7 @@ const NAV = [
   { to: "/trades", label: "Trades", icon: Table2 },
   { to: "/screener", label: "Yield Screener", icon: Calculator },
   { to: "/radar", label: "Earnings Radar", icon: Radar },
+  { to: "/calendar", label: "Calendar", icon: CalendarDays },
   { to: "/insights", label: "Insights", icon: Lightbulb },
   { to: "/import", label: "Import / Data", icon: Upload },
 ];
