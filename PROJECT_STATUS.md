@@ -45,11 +45,14 @@ their options trades, and track premium income, Wheel campaigns, and performance
 - **Frontend:** Vite + React + TypeScript + Tailwind + Recharts + SheetJS (xlsx).
 - **Backend:** Supabase (Postgres + Auth + Row-Level Security). Project ref
   `wdzdtnrmdxgyoxuaqpbp`, region `us-east-1`. **Separate** from the ParakaleoMMC backend.
-- **Hosting:** **migrating to Vercel (JF-11, in progress).** Repo config is ready
-  (`vercel.json` + `docs/vercel-deploy.md`); the dashboard steps (import repo, set env
-  vars, whitelist the Vercel URL in Supabase + Google) are the user's to do. GitHub Pages
-  (`npm run deploy`) remains as fallback. Vercel is required before billing — Stripe
-  webhooks + OAuth redirects need serverless functions, which Pages can't host.
+- **Hosting:** **LIVE on Vercel (JF-11 done, 2026-06-12).** Production URL
+  **https://options-website-sandy.vercel.app/** (project `options-website`, Vercel team
+  "Josiah's projects", Hobby plan). Auto-deploys on push to `main`; PRs get preview URLs.
+  Config in `vercel.json`; dashboard playbook in `docs/vercel-deploy.md`. Verified
+  end-to-end: app loads, Google login redirects back to Vercel, cloud-mode trade writes
+  persist. GitHub Pages (`npm run deploy`) remains a manual fallback. Vercel gives the
+  serverless functions (`/api/*`) that Stripe webhooks + OAuth callbacks need (unblocks
+  billing, Phase 3).
 - **Payments:** Stripe (planned, Phase 3).
 
 **Dual-mode data layer** — the core design. The app switches on auth state:
@@ -103,7 +106,7 @@ settings row on signup. Apply with `supabase db push`.
 ### ⬜ TODO (in order)
 | Linear | Work |
 |--------|------|
-| **JF-11** | **Migrate hosting to Vercel** — 🔧 _config ready (`vercel.json`, `docs/vercel-deploy.md`); awaiting user dashboard steps_ |
+| ~~JF-11~~ | ✅ **DONE — hosting migrated to Vercel** (live at options-website-sandy.vercel.app; auth + cloud writes verified) |
 | JF-12 | Stripe: account + define Free/Pro plans + what's gated |
 | JF-13 | Stripe Checkout + Customer Portal |
 | JF-14 | Stripe webhook (signature-verified, idempotent) + entitlement gating |
@@ -114,10 +117,9 @@ settings row on signup. Apply with `supabase db push`.
 | JF-19 | Monitoring (Sentry) + analytics |
 | JF-20 | Launch: live-mode Stripe test + go live |
 
-**NEXT STEP: finish JF-11 (Vercel).** The repo is Vercel-ready; the user must run the
-dashboard steps in `docs/vercel-deploy.md` (import repo, set env vars, whitelist the
-Vercel URL in Supabase + Google), then verify auth on the live URL. After that, billing
-(Phase 3, JF-12 →) is unblocked.
+**NEXT STEP: JF-12 (Stripe planning).** JF-11 is done — hosting is live on Vercel with
+serverless support, so Phase 3 billing is unblocked. JF-12 = create the Stripe account,
+define Free vs Pro tiers, and decide exactly what's gated.
 
 ---
 
@@ -158,8 +160,13 @@ starts and let PR-merge (or a manual `issueUpdate`) move it to Done.
     only listed test users can log in until it's **Published**).
     - Authorized JS origins: `http://localhost:5173`, `https://josiahfalde.github.io`
     - Authorized redirect URI: `https://wdzdtnrmdxgyoxuaqpbp.supabase.co/auth/v1/callback`
-  - Supabase → Auth → URL Configuration: Site URL `https://josiahfalde.github.io/Options-website/`;
-    redirect allow-list `http://localhost:5173/**` + `https://josiahfalde.github.io/Options-website/**`.
+  - Supabase → Auth → URL Configuration (updated 2026-06-12 for Vercel): Site URL
+    `https://options-website-sandy.vercel.app`; redirect allow-list includes
+    `https://options-website-sandy.vercel.app/**` (plus the retained
+    `http://localhost:5173/**` and the legacy github.io entries). Google OAuth client
+    JS origins now also include `https://options-website-sandy.vercel.app`. **The Site
+    URL is the post-auth fallback — pointing it at github.io was what bounced a Vercel
+    login back to github.io until it was switched.**
 - **DOMAIN CHECKLIST (JF-18)** — when a custom domain (e.g. `flywheel.app`) is purchased,
   these must ALL be updated or Google login + redirects break. Order matters:
   1. **Hosting:** point the domain at the host (GitHub Pages: add a `CNAME` file + DNS;
