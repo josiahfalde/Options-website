@@ -12,7 +12,7 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { ArrowRight, TrendingUp, Sparkles } from "lucide-react";
+import { ArrowRight, TrendingUp, Sparkles, ChevronRight } from "lucide-react";
 import { useStore } from "../data/store";
 import {
   computePortfolio,
@@ -21,8 +21,11 @@ import {
   realizedInTimeframe,
   TIMEFRAMES,
   type Timeframe,
+  type TickerStat,
 } from "../data/compute";
 import { Card, Kpi, Pill, SectionTitle, Bar as MiniBar } from "../components/ui";
+import { Drawer } from "../components/Drawer";
+import type { Trade } from "../types";
 import { CapitalBaseEditor } from "../components/CapitalBaseEditor";
 import { BRAND } from "../brand";
 import { usd, usd0, pct, signed, fmtMonth, fmtDate, posneg, cls } from "../lib/format";
@@ -31,6 +34,7 @@ import { useChartTheme } from "../lib/theme";
 export default function Dashboard() {
   const { dataset, setCapitalBase } = useStore();
   const [tf, setTf] = useState<Timeframe>("ALL");
+  const [drillTicker, setDrillTicker] = useState<string | null>(null);
   const ct = useChartTheme();
 
   const p = useMemo(() => computePortfolio(dataset), [dataset]);
@@ -224,11 +228,15 @@ export default function Dashboard() {
               </Link>
             }
           />
-          <div className="space-y-3">
+          <div className="space-y-1">
             {p.tickers.map((t) => {
               const max = Math.max(...p.tickers.map((x) => Math.abs(x.realized)), 1);
               return (
-                <div key={t.ticker} className="flex items-center gap-3">
+                <button
+                  key={t.ticker}
+                  onClick={() => setDrillTicker(t.ticker)}
+                  className="group -mx-2 flex w-[calc(100%+1rem)] items-center gap-3 rounded-lg px-2 py-1.5 text-left transition hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-flux-500/40"
+                >
                   <div className="w-14 shrink-0 font-semibold text-slate-200">{t.ticker}</div>
                   <div className="flex-1">
                     <MiniBar value={t.realized} max={max} tone={t.realized >= 0 ? "green" : "red"} />
@@ -237,7 +245,11 @@ export default function Dashboard() {
                     {signed(t.realized)}
                   </div>
                   {t.sharesHeld > 0 && <Pill tone="gold">{t.sharesHeld} sh</Pill>}
-                </div>
+                  <ChevronRight
+                    size={15}
+                    className="shrink-0 text-slate-600 transition group-hover:text-slate-300"
+                  />
+                </button>
               );
             })}
           </div>
@@ -270,6 +282,113 @@ export default function Dashboard() {
           </div>
         </Card>
       </div>
+
+      {/* Per-ticker drill-down */}
+      <Drawer
+        open={!!drillTicker}
+        onClose={() => setDrillTicker(null)}
+        title={drillTicker ?? ""}
+        sub="Ticker breakdown"
+      >
+        {drillTicker && (
+          <TickerDrill
+            stat={p.tickers.find((t) => t.ticker === drillTicker)!}
+            trades={dataset.trades.filter((t) => t.ticker === drillTicker)}
+            onClose={() => setDrillTicker(null)}
+          />
+        )}
+      </Drawer>
+    </div>
+  );
+}
+
+function TickerDrill({
+  stat,
+  trades,
+  onClose,
+}: {
+  stat: TickerStat;
+  trades: Trade[];
+  onClose: () => void;
+}) {
+  const recent = [...trades].sort((a, b) => b.date.localeCompare(a.date)).slice(0, 12);
+  return (
+    <div className="space-y-5">
+      <div className="grid grid-cols-2 gap-2">
+        <DrillStat label="Realized P&L" value={signed(stat.realized)} tone={posneg(stat.realized)} />
+        <DrillStat label="Win rate" value={pct(stat.winRate, 0)} tone="pos" />
+        <DrillStat label="Premium collected" value={usd(stat.credits)} tone="pos" />
+        <DrillStat label="Paid to buy back" value={usd(stat.buybacks)} tone="neg" />
+        <DrillStat label="Contracts" value={String(stat.contracts)} />
+        <DrillStat label="Open" value={String(stat.openContracts)} />
+        {stat.sharesHeld > 0 && (
+          <>
+            <DrillStat label="Shares held" value={String(stat.sharesHeld)} tone="gold" />
+            <DrillStat label="Cost basis" value={usd(stat.costBasis)} />
+            <DrillStat label="Last price" value={usd(stat.lastPrice)} />
+            <DrillStat label="Unrealized" value={signed(stat.unrealized)} tone={posneg(stat.unrealized)} />
+          </>
+        )}
+      </div>
+
+      <div>
+        <div className="stat-label mb-2 flex items-center justify-between">
+          <span>Recent trades</span>
+          <Link
+            to="/trades"
+            onClick={onClose}
+            className="flex items-center gap-1 text-[11px] normal-case text-flux-300 hover:text-flux-200"
+          >
+            Open in Trades <ArrowRight size={12} />
+          </Link>
+        </div>
+        <div className="space-y-1">
+          {recent.map((t) => (
+            <div
+              key={t.id}
+              className="flex items-center gap-3 rounded-lg bg-white/[0.02] px-2.5 py-1.5"
+            >
+              <span className="w-14 shrink-0 text-xs text-slate-500">{t.date.slice(5)}</span>
+              <ActionPill action={t.action} />
+              {t.status && <span className="text-[11px] text-slate-500">{t.status}</span>}
+              <span
+                className={cls(
+                  "ml-auto num text-sm font-semibold",
+                  t.side === "credit" ? "text-flux-400" : "text-loss-400"
+                )}
+              >
+                {t.side === "credit" ? "+" : "−"}
+                {usd(t.amount)}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function DrillStat({
+  label,
+  value,
+  tone,
+}: {
+  label: string;
+  value: string;
+  tone?: string;
+}) {
+  const toneCls =
+    tone === "pos"
+      ? "text-flux-400"
+      : tone === "neg"
+      ? "text-loss-400"
+      : tone === "gold"
+      ? "text-torque-400"
+      : "text-slate-100";
+  return (
+    <div className="rounded-xl bg-white/[0.03] p-3">
+      <div className="text-[10px] uppercase tracking-wide text-slate-500">{label}</div>
+      <div className={cls("num mt-0.5 text-base font-bold", toneCls)}>{value}</div>
     </div>
   );
 }

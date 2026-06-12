@@ -168,6 +168,24 @@ body {
   @apply text-loss-400;
 }
 
+/* Drawer slide-in (used by src/components/Drawer.tsx). Disabled under
+   prefers-reduced-motion so the panel simply appears. */
+@keyframes slidein {
+  from {
+    transform: translateX(16px);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-\[slidein_\.22s_ease-out\] {
+    animation: none !important;
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /* Light-mode legibility tuning. The accent SCALE stays fixed so solid */
 /* fills (bg-flux-500, bg-loss-500, recharts) keep their vivid color,  */

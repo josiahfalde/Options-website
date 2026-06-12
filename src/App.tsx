@@ -5,6 +5,7 @@ import Trades from "./pages/Trades";
 import Campaigns from "./pages/Campaigns";
 import Screener from "./pages/Screener";
 import RadarPage from "./pages/Radar";
+import CalendarPage from "./pages/Calendar";
 import Insights from "./pages/Insights";
 import ImportData from "./pages/ImportData";
 import Account from "./pages/Account";
@@ -18,6 +19,7 @@ export default function App() {
         <Route path="/campaigns" element={<Campaigns />} />
         <Route path="/screener" element={<Screener />} />
         <Route path="/radar" element={<RadarPage />} />
+        <Route path="/calendar" element={<CalendarPage />} />
         <Route path="/insights" element={<Insights />} />
         <Route path="/import" element={<ImportData />} />
         <Route path="/account" element={<Account />} />
