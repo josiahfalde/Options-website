@@ -336,7 +336,9 @@ function DayCellView({
   let heatStyle: React.CSSProperties | undefined;
   if (mode === "heatmap" && cell && cell.net !== 0) {
     const intensity = Math.min(1, Math.abs(cell.net) / maxAbs);
-    const alpha = 0.12 + intensity * 0.55;
+    // cap max fill alpha (~0.5) so a high-intensity tile never overpowers the
+    // neutral in-cell amount in either theme.
+    const alpha = 0.12 + intensity * 0.38;
     const rgb = cell.net > 0 ? "16,185,129" : "244,63,94";
     heatStyle = { backgroundColor: `rgba(${rgb},${alpha})` };
   }
@@ -381,11 +383,13 @@ function DayCellView({
             value={usd(Math.abs(cell.net), 0)}
             size="xs"
             weight="bold"
-            className={cls(
-              "truncate",
-              // brighter than the default token for legibility over the heat fill
-              cell.net > 0 ? "!text-flux-300" : "!text-loss-300"
-            )}
+            // Gain/loss is already encoded by the heat fill hue AND the
+            // directional arrow, so the number itself stays a high-contrast,
+            // theme-aware neutral (dark text in light theme, light in dark) —
+            // this reads cleanly over the fill at every intensity. Same-hue
+            // text on a strong fill (the old !text-flux-300/!text-loss-300)
+            // washed out on high-premium days.
+            className="truncate !text-slate-50"
           />
         )}
 
