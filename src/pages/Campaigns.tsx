@@ -12,12 +12,13 @@ import {
   MinusCircle,
   RotateCcw,
   ArrowRightLeft,
+  Upload,
 } from "lucide-react";
 import { useStore } from "../data/store";
 import { computeWheels, WHEEL_EXCLUDED, type Wheel } from "../data/compute";
-import { Card, Pill, Bar, EmptyState } from "../components/ui";
+import { Card, Pill, Bar, EmptyState, Delta, deltaDir } from "../components/ui";
 import { ActionPill } from "./Dashboard";
-import { usd, signed, fmtDate, cls, posneg } from "../lib/format";
+import { usd, fmtDate, cls } from "../lib/format";
 import type { Trade } from "../types";
 
 // ---------------------------------------------------------------------------
@@ -102,8 +103,11 @@ export default function Campaigns() {
       <div className="space-y-5">
         <Header suggestedCount={0} />
         <EmptyState
-          title="No wheels yet"
-          sub="Once you log a sold put, Flywheel auto-detects the wheel cycle it kicks off and shows it here for you to confirm."
+          icon={CircleDashed}
+          title="No wheels turning yet"
+          sub="Once you log a sold put, Flywheel auto-detects the wheel cycle it kicks off — sell puts, get assigned, sell calls, get called away — and shows it here for you to confirm."
+          action={{ label: "Import your trades", to: "/import", icon: Upload }}
+          secondaryAction={{ label: "View all trades", to: "/trades" }}
         />
       </div>
     );
@@ -220,15 +224,15 @@ function WheelCard({
       {w.auto && (
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-flux-500/20 bg-flux-500/[0.07] px-3 py-2">
           <span className="flex items-center gap-1.5 text-xs font-medium text-flux-300">
-            <Sparkles size={13} />
-            Suggested wheel — does this look like one cycle?
+            <Sparkles size={13} className="shrink-0" />
+            Auto-detected cycle — confirm if this is one wheel?
           </span>
           <button
             onClick={onConfirm}
             className="btn-primary h-7 gap-1.5 px-3 py-0 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-flux-500/40"
           >
             <Check size={14} />
-            Confirm
+            Confirm wheel
           </button>
         </div>
       )}
@@ -260,8 +264,14 @@ function WheelCard({
         <Stat
           icon={<Coins size={14} />}
           label="Realized"
-          value={signed(w.realized)}
-          tone={posneg(w.realized)}
+          value={
+            <Delta
+              dir={deltaDir(w.realized)}
+              value={usd(Math.abs(w.realized))}
+              size="base"
+              weight="bold"
+            />
+          }
         />
         <Stat
           icon={<Layers size={14} />}
@@ -284,9 +294,11 @@ function WheelCard({
             <span className="text-slate-400">
               Holding {w.sharesHeld} sh · last {usd(w.lastPrice)} · basis {usd(w.costBasis)}
             </span>
-            <span className={cls("num font-semibold", posneg(w.unrealized))}>
-              {signed(w.unrealized)} unreal.
-            </span>
+            <Delta
+              dir={deltaDir(w.unrealized)}
+              value={`${usd(Math.abs(w.unrealized))} unreal.`}
+              size="sm"
+            />
           </div>
         </div>
       )}
@@ -353,11 +365,8 @@ function TradeRow({
     <li className="flex items-center gap-2 rounded-lg bg-white/[0.03] px-2.5 py-1.5">
       <span className="w-[68px] shrink-0 text-[11px] text-slate-500">{fmtDate(t.date)}</span>
       <ActionPill action={t.action} />
-      <span className="num min-w-0 flex-1 truncate text-right text-xs font-semibold text-slate-300">
-        <span className={credit ? "text-flux-400" : "text-loss-400"}>
-          {credit ? "+" : "−"}
-          {usd(t.amount)}
-        </span>
+      <span className="min-w-0 flex-1 justify-end">
+        <Delta dir={credit ? "up" : "down"} value={usd(t.amount)} size="xs" className="float-right" />
       </span>
 
       {/* Move into another confirmed wheel of this ticker */}
@@ -461,11 +470,8 @@ function ExcludedTrades({ trades, onReset }: { trades: Trade[]; onReset: (tid: s
                     {fmtDate(t.date)}
                   </span>
                   <ActionPill action={t.action} />
-                  <span className="num flex-1 text-right text-xs font-semibold">
-                    <span className={credit ? "text-flux-400" : "text-loss-400"}>
-                      {credit ? "+" : "−"}
-                      {usd(t.amount)}
-                    </span>
+                  <span className="flex flex-1 justify-end">
+                    <Delta dir={credit ? "up" : "down"} value={usd(t.amount)} size="xs" />
                   </span>
                   <button
                     onClick={() => onReset(t.id)}
@@ -493,7 +499,7 @@ function Stat({
 }: {
   icon: React.ReactNode;
   label: string;
-  value: string;
+  value: React.ReactNode;
   sub?: string;
   tone?: string;
 }) {
