@@ -9,8 +9,9 @@ import {
   Lightbulb,
   Upload,
   Cog,
+  type LucideProps,
 } from "lucide-react";
-import type { ReactNode } from "react";
+import type { ComponentType, ReactNode } from "react";
 import { BRAND } from "../brand";
 import { DISCLAIMER_SHORT } from "../content/legal";
 import { useStore } from "../data/store";
@@ -18,16 +19,45 @@ import { AuthButton } from "../auth/AuthButton";
 import { DemoBanner } from "../auth/DemoBanner";
 import { ThemeToggle } from "./ThemeToggle";
 
-const NAV = [
-  { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
-  { to: "/campaigns", label: "Wheel Campaigns", icon: CircleDashed },
-  { to: "/trades", label: "Trades", icon: Table2 },
-  { to: "/screener", label: "Yield Screener", icon: Calculator },
-  { to: "/radar", label: "Earnings Radar", icon: Radar },
-  { to: "/calendar", label: "Calendar", icon: CalendarDays },
-  { to: "/insights", label: "Insights", icon: Lightbulb },
-  { to: "/import", label: "Import / Data", icon: Upload },
+type NavItem = { to: string; label: string; icon: ComponentType<LucideProps>; end?: boolean };
+type NavGroup = { heading: string; items: NavItem[] };
+
+// Grouped by job-to-be-done: see how you're doing → manage live positions →
+// research the next trade → review the record → manage your data.
+const NAV_GROUPS: NavGroup[] = [
+  {
+    heading: "Overview",
+    items: [{ to: "/", label: "Dashboard", icon: LayoutDashboard, end: true }],
+  },
+  {
+    heading: "Positions",
+    items: [
+      { to: "/campaigns", label: "Wheel Campaigns", icon: CircleDashed },
+      { to: "/trades", label: "Trades", icon: Table2 },
+    ],
+  },
+  {
+    heading: "Research",
+    items: [
+      { to: "/screener", label: "Yield Screener", icon: Calculator },
+      { to: "/radar", label: "Earnings Radar", icon: Radar },
+    ],
+  },
+  {
+    heading: "Review",
+    items: [
+      { to: "/calendar", label: "Calendar", icon: CalendarDays },
+      { to: "/insights", label: "Insights", icon: Lightbulb },
+    ],
+  },
+  {
+    heading: "Data",
+    items: [{ to: "/import", label: "Import / Data", icon: Upload }],
+  },
 ];
+
+// Flat list for the mobile top-nav (order preserved from the groups).
+const NAV_FLAT: NavItem[] = NAV_GROUPS.flatMap((g) => g.items);
 
 export function Layout({ children }: { children: ReactNode }) {
   const { isSeed } = useStore();
@@ -36,19 +66,28 @@ export function Layout({ children }: { children: ReactNode }) {
       {/* Sidebar */}
       <aside className="sticky top-0 hidden h-screen w-60 shrink-0 flex-col border-r border-white/5 bg-ink-900/60 p-4 backdrop-blur md:flex">
         <Brand />
-        <nav className="mt-6 flex flex-1 flex-col gap-1">
-          {NAV.map((n) => (
-            <NavLink
-              key={n.to}
-              to={n.to}
-              end={n.end}
-              className={({ isActive }) =>
-                "nav-link" + (isActive ? " nav-link-active" : "")
-              }
-            >
-              <n.icon size={18} strokeWidth={2} />
-              {n.label}
-            </NavLink>
+        <nav className="mt-6 flex flex-1 flex-col gap-5 overflow-y-auto">
+          {NAV_GROUPS.map((group) => (
+            <div key={group.heading}>
+              <div className="px-3 pb-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                {group.heading}
+              </div>
+              <div className="flex flex-col gap-0.5">
+                {group.items.map((n) => (
+                  <NavLink
+                    key={n.to}
+                    to={n.to}
+                    end={n.end}
+                    className={({ isActive }) =>
+                      "nav-link" + (isActive ? " nav-link-active" : "")
+                    }
+                  >
+                    <n.icon size={18} strokeWidth={2} />
+                    {n.label}
+                  </NavLink>
+                ))}
+              </div>
+            </div>
           ))}
         </nav>
         {isSeed && (
@@ -77,16 +116,18 @@ export function Layout({ children }: { children: ReactNode }) {
             <AuthButton compact />
           </div>
         </header>
-        <div className="md:hidden">
+        <div className="sticky top-[57px] z-10 bg-ink-950/80 backdrop-blur md:hidden">
           <nav className="flex gap-1 overflow-x-auto border-b border-white/5 px-2 py-2">
-            {NAV.map((n) => (
+            {NAV_FLAT.map((n) => (
               <NavLink
                 key={n.to}
                 to={n.to}
                 end={n.end}
                 className={({ isActive }) =>
-                  "flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium " +
-                  (isActive ? "bg-flux-500/10 text-flux-300" : "text-slate-400")
+                  "flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-flux-500/40 " +
+                  (isActive
+                    ? "bg-flux-500/10 text-flux-300 ring-1 ring-inset ring-flux-500/20"
+                    : "text-slate-400 hover:text-slate-200")
                 }
               >
                 <n.icon size={15} />

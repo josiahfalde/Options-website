@@ -12,7 +12,16 @@ import {
   XAxis,
   YAxis,
 } from "recharts";
-import { ArrowRight, TrendingUp, Sparkles, ChevronRight } from "lucide-react";
+import {
+  ArrowRight,
+  Sparkles,
+  ChevronRight,
+  Wallet,
+  Trophy,
+  Gauge,
+  LineChart as LineChartIcon,
+  Upload,
+} from "lucide-react";
 import { useStore } from "../data/store";
 import {
   computePortfolio,
@@ -23,7 +32,7 @@ import {
   type Timeframe,
   type TickerStat,
 } from "../data/compute";
-import { Card, Kpi, Pill, SectionTitle, Bar as MiniBar } from "../components/ui";
+import { Card, Kpi, Pill, SectionTitle, Bar as MiniBar, Delta, deltaDir, EmptyState } from "../components/ui";
 import { Drawer } from "../components/Drawer";
 import type { Trade } from "../types";
 import { CapitalBaseEditor } from "../components/CapitalBaseEditor";
@@ -42,9 +51,17 @@ export default function Dashboard() {
   const months = useMemo(() => monthlySeries(dataset), [dataset]);
   const tfRealized = useMemo(() => realizedInTimeframe(dataset, tf), [dataset, tf]);
 
+  // Prior-period context for the hero: the most recent completed month's P&L
+  // and its change vs the month before — honest, derived from monthlySeries.
+  const lastMonth = months.length ? months[months.length - 1] : null;
+  const prevMonth = months.length > 1 ? months[months.length - 2] : null;
+  const momChange = lastMonth && prevMonth ? lastMonth.pl - prevMonth.pl : null;
+
+  const hasTrades = dataset.trades.length > 0;
+
   return (
     <div className="space-y-6">
-      {/* Hero */}
+      {/* Hero header */}
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-extrabold tracking-tight text-slate-50 md:text-3xl">
@@ -55,13 +72,18 @@ export default function Dashboard() {
             {BRAND.tagline}
           </p>
         </div>
-        <div className="flex flex-wrap items-center gap-1.5 rounded-xl border border-white/5 bg-ink-900/60 p-1">
+        <div
+          role="group"
+          aria-label="Timeframe"
+          className="flex flex-wrap items-center gap-1.5 rounded-xl border border-white/5 bg-ink-900/60 p-1"
+        >
           {TIMEFRAMES.map((t) => (
             <button
               key={t}
               onClick={() => setTf(t)}
+              aria-pressed={tf === t}
               className={cls(
-                "rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors",
+                "rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-flux-500/40",
                 tf === t ? "bg-flux-500 text-ink-950" : "text-slate-400 hover:text-slate-100"
               )}
             >
@@ -71,49 +93,116 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* KPI grid */}
+      {!hasTrades ? (
+        <EmptyState
+          icon={LineChartIcon}
+          title="No trades yet — let's build your flywheel"
+          sub="Flywheel turns your sold puts and calls into momentum and yield analytics. Import your broker history or log your first trade to see your realized P&L, win rate, and yield come to life."
+          action={{ label: "Import your trades", to: "/import", icon: Upload }}
+          secondaryAction={{ label: "Browse the demo", to: "/trades" }}
+        />
+      ) : (
+        <>
+      {/* KPI grid — inverted pyramid: hero P&L top-left, then context metrics */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {/* Hero: the single most important answer — all-time realized P&L */}
         <Kpi
-          label={`Realized P&L · ${tf}`}
-          value={signed(tfRealized)}
-          tone={tfRealized >= 0 ? "pos" : "neg"}
+          size="lg"
+          className="col-span-2"
+          icon={Wallet}
+          label="Realized P&L · all-time"
+          value={signed(p.realized)}
+          tone={p.realized >= 0 ? "pos" : "neg"}
+          delta={
+            momChange != null ? (
+              <Delta
+                dir={deltaDir(momChange)}
+                value={`${signed(momChange, 0)} MoM`}
+                size="sm"
+              />
+            ) : undefined
+          }
           sub={
             <span className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5">
-              <span>{pct(p.returnPct)} on</span>
+              <span className={cls("num font-semibold", posneg(p.realized))}>
+                {pct(p.returnPct)}
+              </span>
+              <span>return on</span>
               <CapitalBaseEditor
                 capitalBase={p.capitalBase}
                 estimated={p.capitalEstimated}
                 onCommit={setCapitalBase}
               />
-              <span>· all-time</span>
+              <span>
+                · {tf === "ALL" ? "all-time" : `${signed(tfRealized, 0)} in last ${tf}`}
+              </span>
             </span>
           }
-          hint="Premium collected minus buybacks (cash basis). Matches your workbook's realized number."
+          hint="Premium collected minus buybacks (cash basis). Matches your workbook's realized number. MoM compares your two most recent months."
         />
         <Kpi
+          icon={Trophy}
           label="Win Rate"
           value={pct(p.winRate, 0)}
           tone="pos"
-          sub={`${p.wins}W · ${p.losses}L · ${p.assignedCount} assigned of ${p.resolvedCount}`}
+          to="/insights"
+          sub={`${p.wins}W · ${p.losses}L · ${p.assignedCount} assigned of ${p.resolvedCount} resolved`}
           hint="Share of resolved contracts where you kept net premium (expired, closed for profit, or assigned but premium kept)."
         />
         <Kpi
+          icon={Gauge}
           label="Annualized Yield"
           value={pct(p.annualizedReturn, 1)}
           tone="gold"
           sub={`${pct(p.monthlyYield, 2)}/mo on capital · ${p.daysActive}d active`}
           hint="Realized return on capital base, annualized from your first trade date — the real yield on deployed cash."
         />
+      </div>
+
+      {/* Secondary metric row */}
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Kpi
           label="Alpha vs SPY"
-          value={p.hasSpy ? (p.alpha >= 0 ? "+" : "") + pct(p.alpha, 1).replace("+", "") : "—"}
+          value={p.hasSpy ? (p.alpha >= 0 ? "+" : "−") + pct(p.alpha, 1).replace(/[+-]/, "") : "—"}
           tone={p.hasSpy ? (p.alpha >= 0 ? "pos" : "neg") : "neutral"}
+          delta={
+            p.hasSpy ? (
+              <Delta dir={deltaDir(p.alpha)} value={pct(p.alpha, 1)} size="xs" />
+            ) : undefined
+          }
           sub={
-            p.hasSpy
-              ? `You ${pct(p.returnPct, 1)} · SPY ${pct(p.spyReturn, 1)} YoY`
-              : "Set the SPY benchmark on the Data page to compare"
+            p.hasSpy ? (
+              <>You {pct(p.returnPct, 1)} vs SPY {pct(p.spyReturn, 1)} (trailing 12mo)</>
+            ) : (
+              <Link to="/import" className="text-flux-300 hover:text-flux-200">
+                Set the SPY benchmark to compare →
+              </Link>
+            )
           }
           hint="Your realized return minus SPY's trailing-12-month total return."
+        />
+        <Kpi
+          label="Premium Collected"
+          value={usd(p.premiumCollected)}
+          tone="pos"
+          sub={`${usd(p.buybacks)} paid to buy back · ${p.contracts} contracts sold`}
+          hint="Total credits received from selling puts and calls, before buybacks."
+        />
+        <Kpi
+          label="Mark-to-Market"
+          value={signed(p.mtm)}
+          tone={p.mtm >= 0 ? "pos" : "neg"}
+          delta={<Delta dir={deltaDir(p.unrealized)} value={`${signed(p.unrealized, 0)} open`} size="xs" />}
+          sub={`Realized ${signed(p.realized, 0)} + unrealized on open shares`}
+          hint="Realized premium plus the live gain/loss on shares you still hold (sharesHeld × lastPrice − cost)."
+        />
+        <Kpi
+          label="Capital Deployed"
+          value={pct(p.deployedPct, 0)}
+          tone="gold"
+          to="/radar"
+          sub={`${usd0(p.capitalDeployed)} at work · ${p.openContracts} open contracts`}
+          hint="Capital tied up in held shares plus open cash-secured-put collateral, as a share of your capital base."
         />
       </div>
 
@@ -125,7 +214,7 @@ export default function Dashboard() {
             sub="Every credit lifts the line; every buyback dips it."
             right={
               <Pill tone={p.realized >= 0 ? "green" : "red"}>
-                <TrendingUp size={13} /> {signed(p.realized)}
+                <Delta dir={deltaDir(p.realized)} value={signed(p.realized, 0)} size="xs" />
               </Pill>
             }
           />
@@ -199,24 +288,6 @@ export default function Dashboard() {
         </Card>
       </div>
 
-      {/* Secondary KPIs */}
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <MiniStat label="Premium Collected" value={usd(p.premiumCollected)} tone="text-flux-400" />
-        <MiniStat label="Paid to Buy Back" value={usd(p.buybacks)} tone="text-loss-400" />
-        <MiniStat
-          label="Mark-to-Market"
-          value={signed(p.mtm)}
-          tone={p.mtm >= 0 ? "text-flux-400" : "text-loss-400"}
-          sub={`incl. ${usd(p.unrealized)} open shares`}
-        />
-        <MiniStat
-          label="Capital Deployed"
-          value={pct(p.deployedPct, 0)}
-          tone="text-torque-400"
-          sub={`${usd0(p.capitalDeployed)} at work`}
-        />
-      </div>
-
       {/* Ticker leaderboard + recent */}
       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
         <Card>
@@ -282,6 +353,8 @@ export default function Dashboard() {
           </div>
         </Card>
       </div>
+        </>
+      )}
 
       {/* Per-ticker drill-down */}
       <Drawer
@@ -393,25 +466,6 @@ function DrillStat({
   );
 }
 
-function MiniStat({
-  label,
-  value,
-  tone,
-  sub,
-}: {
-  label: string;
-  value: string;
-  tone: string;
-  sub?: string;
-}) {
-  return (
-    <Card>
-      <div className="stat-label">{label}</div>
-      <div className={cls("mt-1.5 num text-xl font-bold", tone)}>{value}</div>
-      {sub && <div className="mt-0.5 text-[11px] text-slate-500">{sub}</div>}
-    </Card>
-  );
-}
 
 export function ActionPill({ action }: { action: string }) {
   const map: Record<string, { tone: any; label: string }> = {
