@@ -123,7 +123,8 @@ body {
   }
   .btn {
     @apply inline-flex items-center justify-center gap-2 rounded-xl px-4 py-2 text-sm font-semibold
-           transition-colors disabled:opacity-40 disabled:cursor-not-allowed;
+           transition-colors disabled:opacity-40 disabled:cursor-not-allowed
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-flux-500/40;
   }
   .btn-primary {
     @apply btn bg-flux-500 text-ink-950 hover:bg-flux-400;
@@ -144,7 +145,8 @@ body {
   }
   .nav-link {
     @apply flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-slate-400
-           transition-colors hover:bg-white/5 hover:text-slate-100;
+           transition-colors hover:bg-white/5 hover:text-slate-100
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-flux-500/40;
   }
   .nav-link-active {
     @apply bg-flux-500/10 text-flux-300 ring-1 ring-inset ring-flux-500/20;

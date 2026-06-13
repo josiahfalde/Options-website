@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Search, Trash2, ArrowUpDown, StickyNote, BookOpen, CircleDashed, Sparkles, MinusCircle, RotateCcw } from "lucide-react";
+import { Search, Trash2, ArrowUpDown, StickyNote, BookOpen, CircleDashed, Sparkles, MinusCircle, RotateCcw, Receipt, Upload, ChevronRight } from "lucide-react";
 import { useStore } from "../data/store";
 import {
   filterByTimeframe,
@@ -10,7 +10,7 @@ import {
   WHEEL_EXCLUDED,
   type Wheel,
 } from "../data/compute";
-import { Card, Pill } from "../components/ui";
+import { Card, Pill, Delta, deltaDir, EmptyState } from "../components/ui";
 import { Drawer } from "../components/Drawer";
 import { NoteEditor } from "../components/NoteEditor";
 import { ActionPill } from "./Dashboard";
@@ -66,19 +66,46 @@ export default function Trades() {
   const openTrade = openId ? dataset.trades.find((t) => t.id === openId) : undefined;
   const openWheel = openTrade ? wheels.find((w) => w.tradeIds.includes(openTrade.id)) : undefined;
 
+  const net = credits - debits;
+  const hasTrades = dataset.trades.length > 0;
+
   return (
     <div className="space-y-5">
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-2">
         <h1 className="text-2xl font-extrabold tracking-tight text-slate-50">Trades</h1>
-        <p className="text-sm text-slate-400">
-          {rows.length} trades · <span className="text-flux-400">+{usd(credits)}</span> collected ·{" "}
-          <span className="text-loss-400">−{usd(debits)}</span> paid
-        </p>
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-slate-400">
+          <span>
+            {rows.length} {rows.length === 1 ? "trade" : "trades"}
+            {rows.length !== dataset.trades.length && ` of ${dataset.trades.length}`}
+          </span>
+          <span className="text-slate-600">·</span>
+          <Delta dir="up" value={`${usd(credits)} collected`} icon={false} size="sm" />
+          <span className="text-slate-600">·</span>
+          <Delta dir="down" value={`${usd(debits)} paid`} icon={false} size="sm" />
+          <span className="text-slate-600">·</span>
+          <Delta
+            dir={deltaDir(net)}
+            value={`${usd(Math.abs(net))} net`}
+            size="sm"
+          />
+        </div>
       </div>
 
+      {!hasTrades && (
+        <EmptyState
+          icon={Receipt}
+          title="No trades logged yet"
+          sub="Every sold put, covered call, buyback, and assignment shows up here — sortable, searchable, and ready to journal. Import your broker history to populate it."
+          action={{ label: "Import your trades", to: "/import", icon: Upload }}
+          secondaryAction={{ label: "See the dashboard", to: "/" }}
+        />
+      )}
+
+      {hasTrades && (
+        <>
       {/* Filters */}
       <Card pad={false} className="p-3">
-        <div className="flex flex-wrap items-center gap-3">
+        <div className="flex flex-wrap items-center gap-2.5">
           <div className="relative min-w-[180px] flex-1">
             <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500" />
             <input
@@ -124,8 +151,9 @@ export default function Trades() {
               <button
                 key={t}
                 onClick={() => setTf(t)}
+                aria-pressed={tf === t}
                 className={cls(
-                  "rounded-lg px-2 py-1 text-xs font-semibold transition-colors",
+                  "rounded-lg px-2 py-1 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-flux-500/40",
                   tf === t ? "bg-flux-500 text-ink-950" : "text-slate-400 hover:text-slate-100"
                 )}
               >
@@ -136,43 +164,80 @@ export default function Trades() {
         </div>
       </Card>
 
-      {/* Table */}
-      <Card pad={false} className="overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full">
-            <thead className="border-b border-white/5 bg-white/[0.02]">
-              <tr>
-                <Th onClick={() => toggleSort("date")} active={sort === "date"}>Date</Th>
-                <Th onClick={() => toggleSort("ticker")} active={sort === "ticker"}>Ticker</Th>
-                <th className="th">Action</th>
-                <th className="th">Status</th>
-                <th className="th text-right">Shares</th>
-                <Th onClick={() => toggleSort("amount")} active={sort === "amount"} right>Amount</Th>
-                <th className="th"></th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-white/[0.04]">
-              {rows.map((t) => (
-                <Row
-                  key={t.id}
-                  t={t}
-                  onOpen={() => setOpenId(t.id)}
-                  onDelete={() => deleteTrade(t.id)}
-                />
-              ))}
-              {rows.length === 0 && (
-                <tr>
-                  <td colSpan={7} className="px-4 py-12 text-center text-sm text-slate-500">
-                    {notesOnly
-                      ? "No journaled trades match these filters. Open any trade to add a note."
-                      : "No trades match these filters."}
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </Card>
+      {rows.length === 0 ? (
+        <EmptyState
+          compact
+          icon={Search}
+          title="No trades match these filters"
+          sub={
+            notesOnly
+              ? "No journaled trades in this view. Clear the Journal filter, or open any trade to add a note."
+              : "Try a different timeframe, strategy, or search term."
+          }
+          action={{
+            label: "Clear filters",
+            onClick: () => {
+              setQ("");
+              setStrat("ALL");
+              setNotesOnly(false);
+              setTf("ALL");
+            },
+          }}
+        />
+      ) : (
+        <>
+          {/* Desktop / tablet: full table */}
+          <Card pad={false} className="hidden overflow-hidden md:block">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="border-b border-white/5 bg-white/[0.02]">
+                  <tr>
+                    <Th onClick={() => toggleSort("date")} active={sort === "date"}>Date</Th>
+                    <Th onClick={() => toggleSort("ticker")} active={sort === "ticker"}>Ticker</Th>
+                    <th className="th">Action</th>
+                    <th className="th">Status</th>
+                    <th className="th text-right">Shares</th>
+                    <Th onClick={() => toggleSort("amount")} active={sort === "amount"} right>Amount</Th>
+                    <th className="th"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/[0.04]">
+                  {rows.map((t) => (
+                    <Row
+                      key={t.id}
+                      t={t}
+                      onOpen={() => setOpenId(t.id)}
+                      onDelete={() => deleteTrade(t.id)}
+                    />
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Card>
+
+          {/* Mobile: stacked cards — no horizontal scroll, full detail per row */}
+          <div className="space-y-2 md:hidden">
+            <div className="flex items-center justify-between px-1 text-[11px] font-semibold uppercase tracking-wider text-slate-500">
+              <span>Sort</span>
+              <div className="flex items-center gap-1">
+                <MobileSortBtn label="Date" active={sort === "date"} dir={dir} onClick={() => toggleSort("date")} />
+                <MobileSortBtn label="Ticker" active={sort === "ticker"} dir={dir} onClick={() => toggleSort("ticker")} />
+                <MobileSortBtn label="Amount" active={sort === "amount"} dir={dir} onClick={() => toggleSort("amount")} />
+              </div>
+            </div>
+            {rows.map((t) => (
+              <TradeCard
+                key={t.id}
+                t={t}
+                onOpen={() => setOpenId(t.id)}
+                onDelete={() => deleteTrade(t.id)}
+              />
+            ))}
+          </div>
+        </>
+      )}
+        </>
+      )}
 
       {/* Trade detail / journal drawer */}
       <Drawer
@@ -258,9 +323,13 @@ function Row({ t, onOpen, onDelete }: { t: Trade; onOpen: () => void; onDelete: 
         {t.status ? <Pill tone={statusTone}>{t.status}</Pill> : <span className="text-slate-600">—</span>}
       </td>
       <td className="td text-right num text-slate-400">{t.shares}</td>
-      <td className={cls("td text-right num font-semibold", credit ? "text-flux-400" : "text-loss-400")}>
-        {credit ? "+" : "−"}
-        {usd(t.amount)}
+      <td className="td text-right">
+        <Delta
+          dir={credit ? "up" : "down"}
+          value={usd(t.amount)}
+          size="base"
+          className="justify-end"
+        />
       </td>
       <td className="td text-right">
         <button
@@ -276,6 +345,96 @@ function Row({ t, onOpen, onDelete }: { t: Trade; onOpen: () => void; onDelete: 
         </button>
       </td>
     </tr>
+  );
+}
+
+// ---- mobile presentation ---------------------------------------------------
+
+function MobileSortBtn({
+  label,
+  active,
+  dir,
+  onClick,
+}: {
+  label: string;
+  active: boolean;
+  dir: 1 | -1;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      aria-pressed={active}
+      className={cls(
+        "inline-flex items-center gap-0.5 rounded-lg px-2 py-1 text-[11px] font-semibold normal-case tracking-normal transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-flux-500/40",
+        active ? "bg-flux-500/15 text-flux-300" : "text-slate-400 hover:text-slate-200"
+      )}
+    >
+      {label}
+      <ArrowUpDown
+        size={11}
+        className={cls(active ? "text-flux-400" : "text-slate-600", active && dir === 1 && "rotate-180")}
+      />
+    </button>
+  );
+}
+
+function TradeCard({ t, onOpen, onDelete }: { t: Trade; onOpen: () => void; onDelete: () => void }) {
+  const credit = t.side === "credit";
+  const noted = hasJournalNote(t.note);
+  const statusTone: any =
+    t.status === "Assigned" ? "gold" : t.status === "Open" ? "blue" : "slate";
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      onClick={onOpen}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpen();
+        }
+      }}
+      className="card group flex cursor-pointer items-center gap-3 p-3 transition-colors hover:border-flux-500/30 focus-visible:border-flux-500/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-flux-500/40"
+    >
+      <div className="min-w-0 flex-1">
+        <div className="flex items-center gap-2">
+          <span className="font-semibold text-slate-100">{t.ticker}</span>
+          <ActionPill action={t.action} />
+          {noted && <StickyNote size={13} className="text-flux-400" aria-label="Has a journal note" />}
+        </div>
+        <div className="mt-1 flex items-center gap-2 text-[11px] text-slate-500">
+          <span>{fmtDate(t.date)}</span>
+          {t.status && (
+            <>
+              <span className="text-slate-600">·</span>
+              <span className={cls(
+                statusTone === "gold" ? "text-torque-300" : statusTone === "blue" ? "text-sky-300" : "text-slate-400"
+              )}>{t.status}</span>
+            </>
+          )}
+          {t.shares > 0 && (
+            <>
+              <span className="text-slate-600">·</span>
+              <span className="num">{t.shares} sh</span>
+            </>
+          )}
+        </div>
+      </div>
+      <Delta dir={credit ? "up" : "down"} value={usd(t.amount)} size="base" weight="bold" className="shrink-0" />
+      <button
+        onClick={(e) => {
+          e.stopPropagation();
+          onDelete();
+        }}
+        className="grid h-8 w-8 shrink-0 place-items-center rounded-lg text-slate-600 transition hover:bg-white/5 hover:text-loss-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-flux-500/40"
+        title="Delete trade"
+        aria-label="Delete trade"
+      >
+        <Trash2 size={15} />
+      </button>
+      <ChevronRight size={16} className="-ml-1 shrink-0 text-slate-600 transition group-hover:text-slate-300" aria-hidden="true" />
+    </div>
   );
 }
 
@@ -298,7 +457,12 @@ function TradeDetail({
     <div className="space-y-5">
       {/* facts grid */}
       <div className="grid grid-cols-2 gap-2">
-        <Fact label="Amount" value={(credit ? "+" : "−") + usd(t.amount)} tone={credit ? "pos" : "neg"} />
+        <div className="rounded-xl bg-white/[0.03] p-3">
+          <div className="text-[10px] uppercase tracking-wide text-slate-500">
+            {credit ? "Premium in" : "Cash out"}
+          </div>
+          <Delta dir={credit ? "up" : "down"} value={usd(t.amount)} size="base" weight="bold" className="mt-0.5" />
+        </div>
         <Fact label="Shares" value={String(t.shares)} />
         {t.strike != null && <Fact label="Strike" value={"$" + t.strike} />}
         {t.expiry && <Fact label="Expiry" value={fmtDate(t.expiry)} />}

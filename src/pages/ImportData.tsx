@@ -8,6 +8,9 @@ import {
   Trash2,
   CheckCircle2,
   AlertCircle,
+  FileJson,
+  PencilLine,
+  FolderOpen,
 } from "lucide-react";
 import { useStore } from "../data/store";
 import { parseWorkbook, parseFidelityCsv } from "../data/importXlsx";
@@ -68,31 +71,34 @@ export default function ImportData() {
     }
   }
 
+  const hasOwnData = dataset.trades.length > 0;
+
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-extrabold tracking-tight text-slate-50">Import &amp; Data</h1>
         <p className="mt-1 text-sm text-slate-400">
-          Everything lives in your browser. Import your Wheel workbook, drop a broker CSV, or add a
-          trade by hand.
+          Make Flywheel yours. Bring in your real trades three ways — everything stays in your
+          browser until you sign in to sync.
         </p>
       </div>
 
       {msg && (
         <div
+          role="status"
           className={cls(
-            "flex items-center gap-2 rounded-xl border px-4 py-3 text-sm",
+            "flex items-center gap-2 rounded-xl border px-4 py-3 text-sm animate-fade-up",
             msg.ok
               ? "border-flux-500/25 bg-flux-500/[0.08] text-flux-300"
               : "border-loss-500/25 bg-loss-500/[0.08] text-loss-400"
           )}
         >
-          {msg.ok ? <CheckCircle2 size={16} /> : <AlertCircle size={16} />}
+          {msg.ok ? <CheckCircle2 size={16} className="shrink-0" /> : <AlertCircle size={16} className="shrink-0" />}
           {msg.text}
         </div>
       )}
 
-      {/* Dropzone */}
+      {/* Dropzone — the primary onboarding action */}
       <Card>
         <div
           onDragOver={(e) => {
@@ -107,9 +113,20 @@ export default function ImportData() {
             if (f) handleFile(f);
           }}
           onClick={() => fileRef.current?.click()}
+          role="button"
+          tabIndex={0}
+          aria-label="Upload a workbook, CSV, or JSON file"
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              fileRef.current?.click();
+            }
+          }}
           className={cls(
-            "grid cursor-pointer place-items-center rounded-2xl border-2 border-dashed px-6 py-12 text-center transition",
-            drag ? "border-flux-500 bg-flux-500/[0.06]" : "border-white/10 hover:border-white/20"
+            "grid cursor-pointer place-items-center rounded-2xl border-2 border-dashed px-6 py-12 text-center transition focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-flux-500/40",
+            drag
+              ? "border-flux-500 bg-flux-500/[0.06]"
+              : "border-white/15 hover:border-flux-500/40 hover:bg-white/[0.02]"
           )}
         >
           <input
@@ -119,20 +136,46 @@ export default function ImportData() {
             className="hidden"
             onChange={(e) => e.target.files?.[0] && handleFile(e.target.files[0])}
           />
-          <div className="grid h-14 w-14 place-items-center rounded-2xl bg-flux-500/10 ring-1 ring-flux-500/25">
-            <Upload className="text-flux-400" />
+          <div className="grid h-16 w-16 place-items-center rounded-2xl bg-flux-500/10 ring-1 ring-inset ring-flux-500/25">
+            <Upload className="text-flux-400" size={28} />
           </div>
-          <div className="mt-3 font-semibold text-slate-200">Drop your workbook or CSV here</div>
-          <div className="mt-1 text-sm text-slate-500">
-            <span className="text-slate-300">Options Trading.xlsx</span> · Fidelity CSV export
+          <div className="mt-4 text-base font-semibold text-slate-100">
+            {drag ? "Drop to import" : "Drag a file here, or browse"}
           </div>
-          <div className="mt-3 flex gap-2">
-            <Pill tone="green"><FileSpreadsheet size={13} /> .xlsx</Pill>
-            <Pill tone="blue">Fidelity .csv</Pill>
+          <div className="mt-1 text-sm text-slate-400">
+            We'll detect the format automatically and show you what came in.
           </div>
+          <span className="btn-primary pointer-events-none mt-4">
+            <FolderOpen size={16} />
+            Choose a file
+          </span>
+        </div>
+
+        {/* What's accepted — three clear paths */}
+        <div className="mt-4 grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+          <FormatCard
+            icon={<FileSpreadsheet size={15} className="text-flux-400" />}
+            tag={<Pill tone="green">.xlsx</Pill>}
+            title="Wheel workbook"
+            desc="Your Options Trading.xlsx — replaces the demo with your full history."
+          />
+          <FormatCard
+            icon={<FileSpreadsheet size={15} className="text-sky-300" />}
+            tag={<Pill tone="blue">.csv</Pill>}
+            title="Fidelity export"
+            desc="A broker CSV of option trades — added to whatever's already loaded."
+          />
+          <FormatCard
+            icon={<FileJson size={15} className="text-slate-300" />}
+            tag={<Pill tone="slate">.json</Pill>}
+            title="Flywheel backup"
+            desc="A JSON file you exported below — restores trades, prices, and settings."
+          />
         </div>
         <p className="mt-3 text-center text-[11px] text-slate-500">
-          Importing replaces the demo data. Re-export anytime with{" "}
+          A <span className="text-slate-400">.xlsx</span> or <span className="text-slate-400">.json</span>{" "}
+          replaces the demo data; a broker <span className="text-slate-400">.csv</span> adds to it. Re-export
+          your workbook anytime with{" "}
           <code className="rounded bg-white/5 px-1 py-0.5 text-slate-400">npm run export-workbook</code>.
         </p>
       </Card>
@@ -142,7 +185,7 @@ export default function ImportData() {
       {/* Settings */}
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <Card>
-          <SectionTitle title="Account & Benchmark" />
+          <SectionTitle title="Account & Benchmark" sub="Drives yield-on-capital and the SPY comparison" />
           <div className="space-y-3">
             <Field
               label="Capital base ($)"
@@ -155,14 +198,20 @@ export default function ImportData() {
             </div>
             <div>
               <div className="stat-label mb-1.5">Last share prices</div>
-              <div className="space-y-2">
-                {Object.entries(dataset.lastPrices).map(([tk, px]) => (
-                  <div key={tk} className="flex items-center gap-3">
-                    <span className="w-14 font-semibold text-slate-200">{tk}</span>
-                    <Field label="" value={px} onCommit={(v) => setPrice(tk, v)} compact />
-                  </div>
-                ))}
-              </div>
+              {Object.keys(dataset.lastPrices).length === 0 ? (
+                <p className="rounded-xl bg-white/[0.03] p-3 text-xs text-slate-500">
+                  No tickers yet — import trades or add one below and its last price shows up here.
+                </p>
+              ) : (
+                <div className="space-y-2">
+                  {Object.entries(dataset.lastPrices).map(([tk, px]) => (
+                    <div key={tk} className="flex items-center gap-3">
+                      <span className="w-14 shrink-0 font-semibold text-slate-200">{tk}</span>
+                      <Field label="" value={px} onCommit={(v) => setPrice(tk, v)} compact />
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </Card>
@@ -191,7 +240,8 @@ export default function ImportData() {
               onClick={() => {
                 if (confirm("Delete all trades? This can't be undone.")) clearAll();
               }}
-              className="btn w-full border border-loss-500/30 text-loss-400 hover:bg-loss-500/10"
+              disabled={!hasOwnData}
+              className="btn w-full border border-loss-500/30 text-loss-400 transition-colors hover:bg-loss-500/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-loss-500/40"
             >
               <Trash2 size={16} /> Clear all trades
             </button>
@@ -211,6 +261,31 @@ export default function ImportData() {
   );
 }
 
+function FormatCard({
+  icon,
+  tag,
+  title,
+  desc,
+}: {
+  icon: React.ReactNode;
+  tag: React.ReactNode;
+  title: string;
+  desc: string;
+}) {
+  return (
+    <div className="rounded-xl border border-white/5 bg-white/[0.03] p-3">
+      <div className="flex items-center justify-between gap-2">
+        <span className="flex items-center gap-1.5 text-sm font-semibold text-slate-100">
+          {icon}
+          {title}
+        </span>
+        {tag}
+      </div>
+      <p className="mt-1.5 text-[11px] leading-relaxed text-slate-400">{desc}</p>
+    </div>
+  );
+}
+
 function ManualEntry({
   onAdd,
   tickers,
@@ -225,8 +300,10 @@ function ManualEntry({
   const [strike, setStrike] = useState("");
   const [expiry, setExpiry] = useState("");
 
+  const canSubmit = !!ticker.trim() && !!amount;
+
   const submit = () => {
-    if (!ticker.trim() || !amount) return;
+    if (!canSubmit) return;
     const credit = action === "CSP" || action === "CC";
     onAdd({
       ticker: ticker.trim().toUpperCase(),
@@ -246,7 +323,11 @@ function ManualEntry({
 
   return (
     <Card>
-      <SectionTitle title="Quick Add Trade" sub="Like your optionstrade skill, in the browser" />
+      <SectionTitle
+        title="Quick Add Trade"
+        sub="No file? Log one by hand — like your optionstrade skill, in the browser"
+        right={<PencilLine size={16} className="text-slate-500" />}
+      />
       <div className="grid grid-cols-2 gap-3 md:grid-cols-7">
         <div className="col-span-1">
           <label className="stat-label">Ticker</label>
@@ -289,7 +370,7 @@ function ManualEntry({
           <input type="date" value={expiry} onChange={(e) => setExpiry(e.target.value)} className="input mt-1.5" />
         </div>
         <div className="flex items-end">
-          <button onClick={submit} className="btn-primary w-full">
+          <button onClick={submit} disabled={!canSubmit} className="btn-primary w-full">
             <Plus size={16} /> Add
           </button>
         </div>
@@ -319,6 +400,7 @@ function Field({
         onBlur={() => onCommit(parseFloat(v) || 0)}
         className={cls("input num", !compact && "mt-1.5")}
         inputMode="decimal"
+        aria-label={label || "Value"}
       />
     </div>
   );

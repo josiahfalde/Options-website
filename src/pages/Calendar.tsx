@@ -9,11 +9,12 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { useStore } from "../data/store";
-import { Card, Pill, EmptyState } from "../components/ui";
+import { Card, Pill, EmptyState, Delta, deltaDir } from "../components/ui";
 import { Drawer } from "../components/Drawer";
 import { ActionPill } from "./Dashboard";
 import { NoteEditor } from "../components/NoteEditor";
-import { usd, signed, fmtDate, cls, posneg } from "../lib/format";
+import { usd, signed, fmtDate, cls } from "../lib/format";
+// posneg replaced by colorblind-safe <Delta/> where gain/loss is shown.
 import { parseNote } from "../lib/notes";
 import {
   dailyActivity,
@@ -77,6 +78,7 @@ export default function CalendarPage() {
 
   const todayIso = new Date().toISOString().slice(0, 10);
   const monthHasActivity = monthCells.length > 0;
+  const hasAnyTrades = dataset.trades.length > 0;
   const upcomingCount = useMemo(
     () =>
       grid
@@ -172,8 +174,14 @@ export default function CalendarPage() {
           <div className="flex flex-wrap items-center gap-x-5 gap-y-1.5">
             <SummaryStat
               label="Net premium"
-              value={signed(summary.net)}
-              tone={summary.net >= 0 ? "pos" : "neg"}
+              value={
+                <Delta
+                  dir={deltaDir(summary.net)}
+                  value={usd(Math.abs(summary.net))}
+                  size="base"
+                  weight="bold"
+                />
+              }
             />
             <SummaryStat label="Events" value={String(summary.events)} />
             <SummaryStat
@@ -254,8 +262,20 @@ export default function CalendarPage() {
       {/* Empty-month hint */}
       {!monthHasActivity && (mode !== "upcoming" || upcomingCount === 0) && (
         <EmptyState
+          compact
+          icon={CalendarDays}
           title={`No activity in ${MONTH_NAMES[m]} ${y}`}
-          sub="Use the arrows to find a month with trades, or jump back to a recent one."
+          sub={
+            hasAnyTrades
+              ? "Nothing recorded this month. Jump to your most recent trading month, or step through with the arrows above."
+              : "Once you log trades, each day they happened will light up here — colored by the premium it threw off."
+          }
+          action={
+            hasAnyTrades
+              ? { label: "Jump to recent activity", onClick: () => setYM(init), icon: CalendarClock }
+              : { label: "Import your trades", to: "/import" }
+          }
+          secondaryAction={hasAnyTrades ? { label: "Today", onClick: goToday } : undefined}
         />
       )}
 
@@ -356,14 +376,17 @@ function DayCellView({
       {/* body */}
       <div className="mt-auto min-w-0">
         {mode === "heatmap" && cell && cell.net !== 0 && (
-          <div
+          <Delta
+            dir={deltaDir(cell.net)}
+            value={usd(Math.abs(cell.net), 0)}
+            size="xs"
+            weight="bold"
             className={cls(
-              "num truncate text-[11px] font-bold sm:text-xs",
-              cell.net > 0 ? "text-flux-300" : "text-loss-300"
+              "truncate",
+              // brighter than the default token for legibility over the heat fill
+              cell.net > 0 ? "!text-flux-300" : "!text-loss-300"
             )}
-          >
-            {signed(cell.net, 0)}
-          </div>
+          />
         )}
 
         {mode === "activity" && cell && (
@@ -464,7 +487,7 @@ function SummaryStat({
   tone,
 }: {
   label: string;
-  value: string;
+  value: React.ReactNode;
   tone?: "pos" | "neg" | "gold";
 }) {
   const toneCls =
@@ -507,9 +530,24 @@ function DayDetail({
       {cell && (
         <>
           <div className="grid grid-cols-3 gap-2">
-            <MiniBox label="Collected" value={"+" + usd(cell.credits)} tone="pos" />
-            <MiniBox label="Bought back" value={cell.buybacks ? "−" + usd(cell.buybacks) : "—"} tone={cell.buybacks ? "neg" : "neutral"} />
-            <MiniBox label="Net" value={signed(cell.net)} tone={cell.net >= 0 ? "pos" : "neg"} />
+            <MiniBox
+              label="Collected"
+              value={<Delta dir="up" value={usd(cell.credits)} size="base" weight="bold" />}
+            />
+            <MiniBox
+              label="Bought back"
+              value={
+                cell.buybacks ? (
+                  <Delta dir="down" value={usd(cell.buybacks)} size="base" weight="bold" />
+                ) : (
+                  "—"
+                )
+              }
+            />
+            <MiniBox
+              label="Net"
+              value={<Delta dir={deltaDir(cell.net)} value={usd(Math.abs(cell.net))} size="base" weight="bold" />}
+            />
           </div>
 
           <div className="space-y-2">
@@ -523,15 +561,12 @@ function DayDetail({
                     <span className="font-semibold text-slate-100">{t.ticker}</span>
                     <ActionPill action={t.action} />
                     {t.status && <span className="text-xs text-slate-500">{t.status}</span>}
-                    <span
-                      className={cls(
-                        "ml-auto num text-sm font-semibold",
-                        credit ? "text-flux-400" : "text-loss-400"
-                      )}
-                    >
-                      {credit ? "+" : "−"}
-                      {usd(t.amount)}
-                    </span>
+                    <Delta
+                      dir={credit ? "up" : "down"}
+                      value={usd(t.amount)}
+                      size="base"
+                      className="ml-auto"
+                    />
                   </div>
                   <div className="mt-1 flex items-center gap-3 text-[11px] text-slate-500">
                     <span>{t.shares} sh</span>
@@ -582,9 +617,12 @@ function DayDetail({
                 <Pill tone={u.kind === "earnings" ? "gold" : "blue"}>
                   {u.kind === "earnings" ? "Earnings" : "Expiry"}
                 </Pill>
-                <span className={cls("ml-auto num text-sm", posneg(u.trade.amount))}>
-                  +{usd(u.trade.amount)}
-                </span>
+                <Delta
+                  dir={deltaDir(u.trade.amount)}
+                  value={usd(u.trade.amount)}
+                  size="sm"
+                  className="ml-auto"
+                />
               </div>
             ))}
           </div>
@@ -594,21 +632,11 @@ function DayDetail({
   );
 }
 
-function MiniBox({
-  label,
-  value,
-  tone,
-}: {
-  label: string;
-  value: string;
-  tone: "pos" | "neg" | "neutral";
-}) {
-  const toneCls =
-    tone === "pos" ? "text-flux-400" : tone === "neg" ? "text-loss-400" : "text-slate-300";
+function MiniBox({ label, value }: { label: string; value: React.ReactNode }) {
   return (
     <div className="rounded-xl bg-white/[0.03] p-2.5">
       <div className="text-[10px] uppercase tracking-wide text-slate-500">{label}</div>
-      <div className={cls("num mt-0.5 text-sm font-bold", toneCls)}>{value}</div>
+      <div className="num mt-0.5 text-sm font-bold text-slate-300">{value}</div>
     </div>
   );
 }
