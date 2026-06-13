@@ -54,7 +54,8 @@ export function AuthModal({
   onClose: () => void;
   initialMode?: Mode;
 }) {
-  const { user, signUp, signInWithPassword, resetPassword, signInWithGoogle } = useAuth();
+  const { user, signUp, signInWithPassword, resetPassword, signInWithGoogle, oauthError, clearOauthError } =
+    useAuth();
   const [mode, setMode] = useState<Mode>(initialMode);
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -91,15 +92,23 @@ export function AuthModal({
     return () => window.removeEventListener("keydown", onKey);
   }, [open, onClose]);
 
+  // Drop any surfaced OAuth-return error once the modal is dismissed.
+  useEffect(() => {
+    if (!open) clearOauthError();
+  }, [open, clearOauthError]);
+
   if (!open) return null;
 
   const copy = COPY[mode];
+  // A Google redirect-return failure (set globally) shows alongside form errors.
+  const shownError = error ?? oauthError;
 
   async function submit(e: FormEvent) {
     e.preventDefault();
     setBusy(true);
     setError(null);
     setInfo(null);
+    clearOauthError();
 
     if (mode === "reset") {
       const { error } = await resetPassword(email.trim());
@@ -128,6 +137,7 @@ export function AuthModal({
     setBusy(true);
     setError(null);
     setInfo(null);
+    clearOauthError();
     const { error } = await signInWithGoogle();
     // On success the browser redirects to Google, so this component unmounts
     // and we never reach here. We only land here on failure.
@@ -199,9 +209,9 @@ export function AuthModal({
             </label>
           )}
 
-          {error && (
-            <div className="rounded-lg border border-loss-500/25 bg-loss-500/10 px-3 py-2 text-xs text-loss-400">
-              {error}
+          {shownError && (
+            <div className="rounded-lg border border-loss-500/25 bg-loss-500/10 px-3 py-2 text-xs leading-relaxed text-loss-400">
+              {shownError}
             </div>
           )}
           {info && (
