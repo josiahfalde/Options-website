@@ -31,6 +31,12 @@ export interface Trade {
   note?: string | null;
   thesis?: string | null;
   grade?: number | null; // 1-5 self-graded execution
+  /**
+   * Wheel-grouping override (see computeWheels). null = auto-detected cycle;
+   * an explicit id pins this trade to a specific wheel (used to confirm /
+   * merge / split); the WHEEL_EXCLUDED sentinel marks "not part of any wheel".
+   */
+  wheelId?: string | null;
 }
 
 export interface SpyBenchmark {

@@ -503,6 +503,150 @@ export function computeCampaigns(ds: Dataset): WheelCampaign[] {
     .sort((a, b) => b.premiumCollected - a.premiumCollected);
 }
 
+// ---- wheels (per-cycle, with user override) --------------------------------
+// A "wheel" is one cycle of the strategy: sell put(s) → (maybe) get assigned →
+// sell calls → get called away, back to flat. The next put after a cycle
+// completes starts a NEW wheel. This is finer-grained than computeCampaigns
+// (which lumps a whole ticker together) and is what the Trades/Campaigns UI
+// uses for the "is this part of a wheel?" tagging.
+//
+// Grouping precedence per trade:
+//   • wheelId === WHEEL_EXCLUDED  → not part of any wheel (hidden from wheels)
+//   • wheelId set (any other)     → pinned to that explicit wheel (confirm/merge/split)
+//   • wheelId null/undefined      → falls into its auto-detected cycle
+// Auto cycle ids start with "auto:"; an explicit (user-confirmed) id never does,
+// so `auto` on the result distinguishes "suggested" from "confirmed".
+
+export const WHEEL_EXCLUDED = "__none__";
+
+export type WheelStatus = "Selling puts" | "Holding shares" | "Complete";
+
+export interface Wheel {
+  id: string;
+  ticker: string;
+  /** true = auto-detected suggestion (not yet user-confirmed). */
+  auto: boolean;
+  status: WheelStatus;
+  startDate: string;
+  endDate: string;
+  tradeIds: string[];
+  contracts: number; // sold contracts
+  putsAssigned: number;
+  calledAway: number;
+  premiumCollected: number;
+  buybacks: number;
+  realized: number;
+  sharesHeld: number;
+  costBasis: number;
+  lastPrice: number;
+  unrealized: number;
+  capitalAtRisk: number;
+}
+
+/** Auto-detected cycle id for every trade, keyed by trade id. Pure + deterministic. */
+function autoCycleIds(ds: Dataset): Map<string, string> {
+  const ids = new Map<string, string>();
+  const tickers = Array.from(new Set(ds.trades.map((t) => t.ticker)));
+  for (const ticker of tickers) {
+    const sorted = ds.trades
+      .filter((t) => t.ticker === ticker)
+      .slice()
+      .sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
+
+    let active = false;
+    let idx = 0;
+    let shares = 0;
+    let everHeld = false;
+    let openCredits = 0;
+    let startDate = "";
+
+    for (const t of sorted) {
+      if (!active) {
+        active = true;
+        idx++;
+        shares = 0;
+        everHeld = false;
+        openCredits = 0;
+        startDate = t.date;
+      }
+      ids.set(t.id, `auto:${ticker}:${startDate}:${idx}`);
+
+      if (isAssign(t)) {
+        shares += t.shares;
+        everHeld = true;
+      }
+      if (t.action === "CC" && t.status === "Assigned") shares -= t.shares;
+      if (isCredit(t) && t.status === "Open") openCredits++;
+
+      // A cycle completes only once it has held shares and returned to flat with
+      // nothing still open — so a streak of expiring puts stays ONE wheel.
+      if (everHeld && shares <= 0 && openCredits === 0) active = false;
+    }
+  }
+  return ids;
+}
+
+export function computeWheels(ds: Dataset): Wheel[] {
+  const auto = autoCycleIds(ds);
+
+  // Resolve each trade's final wheel key (or null when excluded).
+  const groups = new Map<string, Trade[]>();
+  for (const t of ds.trades) {
+    if (t.wheelId === WHEEL_EXCLUDED) continue;
+    const key = t.wheelId ?? auto.get(t.id);
+    if (!key) continue;
+    (groups.get(key) ?? groups.set(key, []).get(key)!).push(t);
+  }
+
+  const wheels: Wheel[] = [];
+  for (const [id, tt] of groups) {
+    const ticker = tt[0].ticker;
+    const dates = tt.map((t) => t.date).sort();
+    const sold = tt.filter(isCredit);
+    const credits = sum(sold.map((t) => t.amount));
+    const buybacks = sum(tt.filter(isBuyback).map((t) => t.amount));
+    const realized = credits - buybacks;
+    const held = sharesHeld(tt, ticker);
+    const invested = investedInHeld(tt, ticker);
+    const lastPrice = ds.lastPrices[ticker] ?? 0;
+    const costBasis = held > 0 ? (invested - realized) / held : 0;
+    const unrealized = held > 0 ? held * (lastPrice - costBasis) : 0;
+    const openContracts = sold.filter((t) => t.status === "Open").length;
+    const openCspCollateral = sold
+      .filter((t) => t.status === "Open" && t.action === "CSP")
+      .reduce((a, t) => a + (t.strike ? t.strike * t.shares : lastPrice * t.shares), 0);
+    const status: WheelStatus =
+      held > 0 ? "Holding shares" : openContracts > 0 ? "Selling puts" : "Complete";
+
+    wheels.push({
+      id,
+      ticker,
+      auto: id.startsWith("auto:"),
+      status,
+      startDate: dates[0] ?? "",
+      endDate: dates[dates.length - 1] ?? "",
+      tradeIds: tt.map((t) => t.id),
+      contracts: sold.length,
+      putsAssigned: tt.filter(isAssign).length,
+      calledAway: tt.filter((t) => t.action === "CC" && t.status === "Assigned").length,
+      premiumCollected: credits,
+      buybacks,
+      realized,
+      sharesHeld: held,
+      costBasis,
+      lastPrice,
+      unrealized,
+      capitalAtRisk: invested + openCspCollateral,
+    });
+  }
+
+  // Active wheels first (holding > selling > complete), then most recent.
+  const rank: Record<WheelStatus, number> = { "Holding shares": 0, "Selling puts": 1, Complete: 2 };
+  return wheels.sort(
+    (a, b) => rank[a.status] - rank[b.status] || b.startDate.localeCompare(a.startDate)
+  );
+}
+
 // ---- open positions (for the radar) ----------------------------------------
 export interface OpenPosition {
   trade: Trade;
