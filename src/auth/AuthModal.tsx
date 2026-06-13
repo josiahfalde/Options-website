@@ -250,6 +250,21 @@ export function AuthModal({
               </button>
             </>
           )}
+
+          {mode === "signup" && (
+            <p className="mt-1 text-center text-[11px] leading-relaxed text-slate-500">
+              By creating an account you acknowledge {BRAND.name} is informational only and{" "}
+              <a
+                href="#/disclaimer"
+                target="_blank"
+                rel="noreferrer"
+                className="font-medium text-slate-400 underline underline-offset-2 hover:text-slate-200"
+              >
+                not financial advice
+              </a>
+              .
+            </p>
+          )}
         </form>
 
         <div className="mt-4 flex flex-col gap-1 text-center text-xs text-slate-400">
