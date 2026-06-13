@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
-import { Check, X, Gauge } from "lucide-react";
-import { Card, Pill, SectionTitle } from "../components/ui";
+import { Check, X, Gauge, Sparkles } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Card, Pill, SectionTitle, Delta, deltaDir } from "../components/ui";
 import { cspYield, checkRules, DEFAULT_RULES, type RuleConfig } from "../lib/finance";
 import { usd, pct, cls } from "../lib/format";
 import { useStore } from "../data/store";
@@ -27,6 +28,9 @@ export default function Screener() {
     [y, dte, rules, earnings]
   );
   const go = checks.every((c) => c.pass);
+  const passCount = checks.filter((c) => c.pass).length;
+  // Yield headroom vs the user's annualized-target rule — the headline context.
+  const yieldVsTarget = y.annualized - rules.minAnnualized;
 
   const setFromTicker = (t: string) => {
     setTicker(t);
@@ -49,7 +53,7 @@ export default function Screener() {
         <Card>
           <SectionTitle title="Contract" />
           <div className="space-y-4">
-            {tickers.length > 0 && (
+            {tickers.length > 0 ? (
               <div>
                 <label className="stat-label">Ticker (loads last price)</label>
                 <div className="mt-1.5 flex flex-wrap gap-1.5">
@@ -57,15 +61,26 @@ export default function Screener() {
                     <button
                       key={t}
                       onClick={() => setFromTicker(t)}
+                      aria-pressed={ticker === t}
                       className={cls(
-                        "rounded-lg px-2.5 py-1 text-xs font-semibold",
-                        ticker === t ? "bg-flux-500 text-ink-950" : "bg-white/5 text-slate-300 hover:bg-white/10"
+                        "rounded-lg px-2.5 py-1 text-xs font-semibold transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-flux-500/40",
+                        ticker === t
+                          ? "bg-flux-500 text-ink-950"
+                          : "bg-white/5 text-slate-300 hover:bg-white/10"
                       )}
                     >
-                      {t} <span className="opacity-60">{usd(dataset.lastPrices[t], 2)}</span>
+                      {t} <span className="num opacity-60">{usd(dataset.lastPrices[t], 2)}</span>
                     </button>
                   ))}
                 </div>
+              </div>
+            ) : (
+              <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-xs leading-relaxed text-slate-400">
+                Enter a strike and premium below to price any put.{" "}
+                <Link to="/import" className="font-medium text-flux-300 hover:text-flux-200">
+                  Import your trades
+                </Link>{" "}
+                to one-tap-fill your own tickers' last prices.
               </div>
             )}
             <NumField label="Strike ($/share)" value={strike} onChange={setStrike} step={0.5} />
@@ -77,6 +92,7 @@ export default function Screener() {
                 min={1}
                 max={90}
                 value={dte}
+                aria-label="Days to expiry"
                 onChange={(e) => setDte(+e.target.value)}
                 className="mt-2 w-full accent-flux-500"
               />
@@ -94,34 +110,56 @@ export default function Screener() {
           </div>
         </Card>
 
-        {/* Result gauge */}
+        {/* Result */}
         <Card className="lg:col-span-2">
           <SectionTitle
             title="Yield"
             right={
               <Pill tone={go ? "green" : "red"}>
-                <Gauge size={14} /> {go ? "GO — fits your rules" : "NO-GO"}
+                {go ? <Check size={13} /> : <X size={13} />}
+                {go ? "GO — fits your rules" : `NO-GO · ${passCount}/${checks.length}`}
               </Pill>
             }
           />
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-            <Big label="Annualized" value={pct(y.annualized, 1)} tone="text-torque-400" big />
-            <Big label="Period return" value={pct(y.periodReturn, 2)} tone="text-flux-400" />
-            <Big label="Collateral" value={usd(y.collateral, 0)} tone="text-slate-100" />
-            <Big label="Premium" value={usd(premium * contracts)} tone="text-flux-400" />
-            <Big label="Breakeven" value={usd(y.breakeven, 2)} tone="text-slate-100" />
-            <Big label="Downside cushion" value={pct(y.cushionPct, 1)} tone="text-sky-300" />
-            <Big label="$/day" value={usd((premium * contracts) / Math.max(dte, 1), 2)} tone="text-slate-100" />
+
+          {/* Hero: annualized yield with target context */}
+          <div className="rounded-2xl border border-white/5 bg-white/[0.03] p-4">
+            <div className="flex items-center justify-between gap-2">
+              <span className="stat-label flex items-center gap-1.5">
+                <Gauge size={13} className="text-slate-500" />
+                Annualized yield on collateral
+              </span>
+              <Delta
+                dir={deltaDir(yieldVsTarget)}
+                value={`${pct(yieldVsTarget, 1)} vs target`}
+                size="sm"
+              />
+            </div>
+            <div className="mt-2 num text-[34px] font-bold leading-none text-torque-400 md:text-[44px]">
+              {pct(y.annualized, 1)}
+            </div>
+            <div className="mt-2 text-xs text-slate-400">
+              <span className="num text-flux-400">{pct(y.periodReturn, 2)}</span> over {dte} days ·
+              target <span className="num">{pct(rules.minAnnualized, 0)}</span> annualized
+            </div>
+          </div>
+
+          <div className="mt-3 grid grid-cols-2 gap-3 md:grid-cols-3">
+            <Big label="Premium" value={usd(premium * contracts)} tone="pos" />
+            <Big label="Collateral" value={usd(y.collateral, 0)} />
+            <Big label="$/day" value={usd((premium * contracts) / Math.max(dte, 1), 2)} />
+            <Big label="Breakeven" value={usd(y.breakeven, 2)} />
+            <Big label="Downside cushion" value={pct(y.cushionPct, 1)} tone="sky" />
             <Big
               label="If assigned"
               value={usd(y.breakeven * shares, 0)}
-              tone="text-slate-100"
               sub="cost of shares"
             />
           </div>
 
           {/* Rule checklist */}
           <div className="mt-5 space-y-2">
+            <div className="stat-label">Wheel-rule check</div>
             {checks.map((c) => (
               <div
                 key={c.label}
@@ -141,13 +179,18 @@ export default function Screener() {
                   {c.pass ? <Check size={14} /> : <X size={14} />}
                 </span>
                 <span className="font-medium text-slate-200">{c.label}</span>
-                <span className="ml-auto num text-xs text-slate-400">{c.detail}</span>
+                <span className={cls("ml-auto num text-xs", c.pass ? "text-flux-300" : "text-loss-400")}>
+                  {c.detail}
+                </span>
               </div>
             ))}
           </div>
 
-          <details className="mt-4 text-xs text-slate-500">
-            <summary className="cursor-pointer text-slate-400">Tune rules</summary>
+          <details className="group mt-4 text-xs text-slate-500">
+            <summary className="flex cursor-pointer list-none items-center gap-1.5 text-slate-400 hover:text-slate-200">
+              <Sparkles size={13} className="text-flux-400" />
+              Tune rules
+            </summary>
             <div className="mt-3 grid grid-cols-3 gap-3">
               <NumField
                 label="Min annualized %"
@@ -208,18 +251,18 @@ function Big({
   value,
   tone,
   sub,
-  big,
 }: {
   label: string;
   value: string;
-  tone: string;
+  tone?: "pos" | "sky";
   sub?: string;
-  big?: boolean;
 }) {
+  const toneCls =
+    tone === "pos" ? "text-flux-400" : tone === "sky" ? "text-sky-300" : "text-slate-100";
   return (
     <div className="rounded-xl bg-white/[0.03] p-3">
       <div className="stat-label">{label}</div>
-      <div className={cls("mt-1 num font-bold", big ? "text-2xl" : "text-lg", tone)}>{value}</div>
+      <div className={cls("mt-1 num text-lg font-bold", toneCls)}>{value}</div>
       {sub && <div className="text-[10px] text-slate-500">{sub}</div>}
     </div>
   );

@@ -64,7 +64,10 @@ export default function Account() {
 
   return (
     <div className="mx-auto max-w-2xl">
-      <SectionTitle title="Account settings" sub="Manage your sign-in, your data, and this account." />
+      <div className="mb-5">
+        <h1 className="text-2xl font-extrabold tracking-tight text-slate-50">Account settings</h1>
+        <p className="mt-1 text-sm text-slate-400">Manage your sign-in, your data, and this account.</p>
+      </div>
 
       {/* Profile */}
       <Card className="mb-5">
