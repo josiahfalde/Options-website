@@ -107,9 +107,19 @@ export function Layout({ children }: { children: ReactNode }) {
             <p className="max-w-xl">
               {DISCLAIMER_SHORT} Trading options involves substantial risk of loss.
             </p>
-            <NavLink to="/disclaimer" className="shrink-0 font-medium text-slate-400 hover:text-slate-200">
-              Full disclaimer →
-            </NavLink>
+            <nav className="flex shrink-0 items-center gap-3 font-medium text-slate-400">
+              <NavLink to="/disclaimer" className="hover:text-slate-200">
+                Disclaimer
+              </NavLink>
+              <span aria-hidden="true" className="text-slate-600">·</span>
+              <NavLink to="/terms" className="hover:text-slate-200">
+                Terms
+              </NavLink>
+              <span aria-hidden="true" className="text-slate-600">·</span>
+              <NavLink to="/privacy" className="hover:text-slate-200">
+                Privacy
+              </NavLink>
+            </nav>
           </div>
         </footer>
       </div>
