@@ -156,8 +156,8 @@ starts and let PR-merge (or a manual `issueUpdate`) move it to Done.
   cloud insert/update/delete paths have never actually run. First real test is JF-10.
 - **Google sign-in is DONE** (JF-8, 2026-06-10). Google Cloud OAuth client + Supabase
   Google provider enabled + redirect URLs whitelisted. Current config:
-  - Google Cloud OAuth client (project "Flywheel", consent screen in **Testing** mode —
-    only listed test users can log in until it's **Published**).
+  - Google Cloud OAuth client (project "Flywheel", consent screen **Published / In
+    production** as of 2026-06-13 — ANYONE can sign in with Google, not just test users).
     - Authorized JS origins: `http://localhost:5173`, `https://josiahfalde.github.io`
     - Authorized redirect URI: `https://wdzdtnrmdxgyoxuaqpbp.supabase.co/auth/v1/callback`
   - Supabase → Auth → URL Configuration (updated 2026-06-12 for Vercel): Site URL
@@ -174,8 +174,8 @@ starts and let PR-merge (or a manual `issueUpdate`) move it to Done.
   2. **Google Cloud → Credentials → the OAuth client:** add the new origin to
      *Authorized JavaScript origins* (e.g. `https://flywheel.app`). The redirect URI stays
      the Supabase `…/auth/v1/callback` — do NOT change it.
-  3. **Google Cloud → OAuth consent screen:** **Publish** the app (move out of Testing) so
-     anyone — not just listed test users — can sign in.
+  3. **Google Cloud → OAuth consent screen:** already **Published** (done 2026-06-13) —
+     nothing to do here unless Google later requires re-verification for a new domain.
   4. **Supabase → Auth → URL Configuration:** change Site URL to `https://flywheel.app/`
      and add `https://flywheel.app/**` to the redirect allow-list.
   5. **App:** if NOT using HashRouter at a subpath anymore (root domain), the relative
