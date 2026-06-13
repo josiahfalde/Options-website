@@ -1,5 +1,14 @@
-import { createContext, useCallback, useContext, useMemo, useState, type ReactNode } from "react";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type ReactNode,
+} from "react";
 import { AuthModal } from "./AuthModal";
+import { useAuth } from "./AuthProvider";
 
 // ============================================================================
 // One app-wide auth modal, opened from anywhere (sidebar button, demo banner,
@@ -19,12 +28,22 @@ const Ctx = createContext<AuthUICtx | null>(null);
 export function AuthUIProvider({ children }: { children: ReactNode }) {
   const [open, setOpen] = useState(false);
   const [mode, setMode] = useState<Mode>("login");
+  const { oauthError } = useAuth();
 
   const openAuth = useCallback((m: Mode = "login") => {
     setMode(m);
     setOpen(true);
   }, []);
   const closeAuth = useCallback(() => setOpen(false), []);
+
+  // A failed Google redirect-return drops the user back on the app logged out;
+  // pop the modal so the surfaced error is actually seen.
+  useEffect(() => {
+    if (oauthError) {
+      setMode("login");
+      setOpen(true);
+    }
+  }, [oauthError]);
 
   const value = useMemo(() => ({ openAuth, closeAuth }), [openAuth, closeAuth]);
 

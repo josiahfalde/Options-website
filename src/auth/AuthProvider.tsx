@@ -1,5 +1,6 @@
 import {
   createContext,
+  useCallback,
   useContext,
   useEffect,
   useMemo,
@@ -8,6 +9,7 @@ import {
 } from "react";
 import type { Session, User } from "@supabase/supabase-js";
 import { supabase, isSupabaseConfigured } from "../lib/supabase";
+import { handleOAuthReturn } from "./oauthReturn";
 
 // ============================================================================
 // Auth: single source of truth for the current session.
@@ -21,6 +23,9 @@ interface AuthCtx {
   user: User | null;
   loading: boolean; // true until the initial session check resolves
   configured: boolean;
+  /** A Google/OAuth redirect-return failure, surfaced for the auth UI. */
+  oauthError: string | null;
+  clearOauthError: () => void;
   signUp: (email: string, password: string) => Promise<{ error: string | null }>;
   signInWithPassword: (email: string, password: string) => Promise<{ error: string | null }>;
   signInWithGoogle: () => Promise<{ error: string | null }>;
@@ -33,6 +38,7 @@ const Ctx = createContext<AuthCtx | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
   const [loading, setLoading] = useState<boolean>(isSupabaseConfigured);
+  const [oauthError, setOauthError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!supabase) {
@@ -40,19 +46,29 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
     let mounted = true;
-    supabase.auth.getSession().then(({ data }) => {
+    const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
+      if (mounted) setSession(s);
+    });
+
+    // First finish any OAuth (Google) redirect return — surfacing a real error
+    // on failure — then read the resulting session.
+    (async () => {
+      const err = await handleOAuthReturn(supabase);
+      if (!mounted) return;
+      if (err) setOauthError(err);
+      const { data } = await supabase.auth.getSession();
       if (!mounted) return;
       setSession(data.session);
       setLoading(false);
-    });
-    const { data: sub } = supabase.auth.onAuthStateChange((_event, s) => {
-      setSession(s);
-    });
+    })();
+
     return () => {
       mounted = false;
       sub.subscription.unsubscribe();
     };
   }, []);
+
+  const clearOauthError = useCallback(() => setOauthError(null), []);
 
   const value = useMemo<AuthCtx>(() => {
     const notConfigured = { error: "Auth is not configured." as string | null };
@@ -61,6 +77,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user: session?.user ?? null,
       loading,
       configured: isSupabaseConfigured,
+      oauthError,
+      clearOauthError,
 
       signUp: async (email, password) => {
         if (!supabase) return notConfigured;
@@ -96,7 +114,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return { error: error?.message ?? null };
       },
     };
-  }, [session, loading]);
+  }, [session, loading, oauthError, clearOauthError]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }
