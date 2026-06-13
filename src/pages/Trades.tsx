@@ -1,7 +1,15 @@
 import { useMemo, useState } from "react";
-import { Search, Trash2, ArrowUpDown, StickyNote, BookOpen } from "lucide-react";
+import { Search, Trash2, ArrowUpDown, StickyNote, BookOpen, CircleDashed, Sparkles, MinusCircle, RotateCcw } from "lucide-react";
 import { useStore } from "../data/store";
-import { filterByTimeframe, TIMEFRAMES, type Timeframe, isCredit } from "../data/compute";
+import {
+  filterByTimeframe,
+  TIMEFRAMES,
+  type Timeframe,
+  isCredit,
+  computeWheels,
+  WHEEL_EXCLUDED,
+  type Wheel,
+} from "../data/compute";
 import { Card, Pill } from "../components/ui";
 import { Drawer } from "../components/Drawer";
 import { NoteEditor } from "../components/NoteEditor";
@@ -54,7 +62,9 @@ export default function Trades() {
     }
   };
 
+  const wheels = useMemo(() => computeWheels(dataset), [dataset]);
   const openTrade = openId ? dataset.trades.find((t) => t.id === openId) : undefined;
+  const openWheel = openTrade ? wheels.find((w) => w.tradeIds.includes(openTrade.id)) : undefined;
 
   return (
     <div className="space-y-5">
@@ -174,7 +184,10 @@ export default function Trades() {
         {openTrade && (
           <TradeDetail
             t={openTrade}
+            wheel={openWheel}
             onSaveNote={(note) => updateTrade(openTrade.id, { note })}
+            onExcludeWheel={() => updateTrade(openTrade.id, { wheelId: WHEEL_EXCLUDED })}
+            onResetWheel={() => updateTrade(openTrade.id, { wheelId: null })}
           />
         )}
       </Drawer>
@@ -266,7 +279,19 @@ function Row({ t, onOpen, onDelete }: { t: Trade; onOpen: () => void; onDelete: 
   );
 }
 
-function TradeDetail({ t, onSaveNote }: { t: Trade; onSaveNote: (note: string | null) => void }) {
+function TradeDetail({
+  t,
+  wheel,
+  onSaveNote,
+  onExcludeWheel,
+  onResetWheel,
+}: {
+  t: Trade;
+  wheel: Wheel | undefined;
+  onSaveNote: (note: string | null) => void;
+  onExcludeWheel: () => void;
+  onResetWheel: () => void;
+}) {
   const credit = t.side === "credit";
   const earn = parseNote(t.note).earn;
   return (
@@ -280,6 +305,9 @@ function TradeDetail({ t, onSaveNote }: { t: Trade; onSaveNote: (note: string | 
         {t.invested != null && <Fact label="Invested" value={usd(t.invested)} tone="gold" />}
         {t.status && <Fact label="Status" value={t.status} />}
       </div>
+
+      {/* wheel membership */}
+      <WheelSection trade={t} wheel={wheel} onExclude={onExcludeWheel} onReset={onResetWheel} />
 
       {earn && (
         <div className="rounded-xl border border-torque-500/20 bg-torque-500/5 px-3 py-2 text-xs text-torque-300">
@@ -296,6 +324,104 @@ function TradeDetail({ t, onSaveNote }: { t: Trade; onSaveNote: (note: string | 
         </div>
         <NoteEditor trade={t} onSave={onSaveNote} />
       </div>
+    </div>
+  );
+}
+
+function WheelSection({
+  trade,
+  wheel,
+  onExclude,
+  onReset,
+}: {
+  trade: Trade;
+  wheel: Wheel | undefined;
+  onExclude: () => void;
+  onReset: () => void;
+}) {
+  const excluded = trade.wheelId === WHEEL_EXCLUDED;
+  const pinned = !!trade.wheelId && !excluded; // confirmed / manually placed
+
+  return (
+    <div>
+      <div className="stat-label mb-2 flex items-center gap-1.5">
+        <CircleDashed size={13} className="text-flux-400" />
+        Wheel
+      </div>
+
+      {excluded ? (
+        <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3">
+          <p className="text-xs text-slate-400">
+            Held out of any wheel. It won't count toward a wheel's premium or cost basis.
+          </p>
+          <button
+            onClick={onReset}
+            className="btn mt-2.5 h-8 gap-1.5 border border-white/10 px-3 py-0 text-xs text-slate-200 hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-flux-500/40"
+          >
+            <RotateCcw size={13} />
+            Reset to auto
+          </button>
+        </div>
+      ) : wheel ? (
+        <div
+          className={cls(
+            "rounded-xl border p-3",
+            wheel.auto
+              ? "border-dashed border-flux-500/25 bg-flux-500/[0.05]"
+              : "border-white/10 bg-white/[0.03]"
+          )}
+        >
+          <div className="flex items-center justify-between gap-2">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-semibold text-slate-100">{wheel.ticker}</span>
+              <Pill tone={wheel.status === "Holding shares" ? "gold" : wheel.status === "Selling puts" ? "green" : "slate"}>
+                {wheel.status}
+              </Pill>
+            </div>
+            {wheel.auto && (
+              <span className="flex items-center gap-1 text-[11px] font-medium text-flux-300">
+                <Sparkles size={12} />
+                Suggested
+              </span>
+            )}
+          </div>
+          <div className="mt-1 text-[11px] text-slate-500">
+            {fmtDate(wheel.startDate)} → {fmtDate(wheel.endDate)} · {wheel.tradeIds.length} trades ·{" "}
+            <span className="num">{usd(wheel.premiumCollected)}</span> premium
+          </div>
+          <div className="mt-2.5 flex items-center gap-2">
+            <button
+              onClick={onExclude}
+              className="btn h-8 gap-1.5 border border-white/10 px-3 py-0 text-xs text-slate-200 hover:bg-white/5 hover:text-loss-400 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-flux-500/40"
+              title="Remove this trade from its wheel"
+            >
+              <MinusCircle size={13} />
+              Exclude from wheel
+            </button>
+            {pinned && (
+              <button
+                onClick={onReset}
+                className="btn h-8 gap-1.5 border border-white/10 px-3 py-0 text-xs text-slate-200 hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-flux-500/40"
+                title="Return this trade to auto-detection"
+              >
+                <RotateCcw size={13} />
+                Reset to auto
+              </button>
+            )}
+          </div>
+          <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
+            Manage and confirm wheels on the{" "}
+            <a href="#/campaigns" className="text-flux-400 hover:underline">
+              Wheels
+            </a>{" "}
+            page.
+          </p>
+        </div>
+      ) : (
+        <div className="rounded-xl border border-white/10 bg-white/[0.03] p-3 text-xs text-slate-400">
+          Not part of a detected wheel cycle.
+        </div>
+      )}
     </div>
   );
 }
