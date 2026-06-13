@@ -10,6 +10,8 @@ import Insights from "./pages/Insights";
 import ImportData from "./pages/ImportData";
 import Account from "./pages/Account";
 import Disclaimer from "./pages/Disclaimer";
+import Terms from "./pages/Terms";
+import Privacy from "./pages/Privacy";
 
 export default function App() {
   return (
@@ -25,6 +27,8 @@ export default function App() {
         <Route path="/import" element={<ImportData />} />
         <Route path="/account" element={<Account />} />
         <Route path="/disclaimer" element={<Disclaimer />} />
+        <Route path="/terms" element={<Terms />} />
+        <Route path="/privacy" element={<Privacy />} />
         <Route path="*" element={<Dashboard />} />
       </Routes>
     </Layout>
