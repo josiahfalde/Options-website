@@ -9,6 +9,7 @@ import CalendarPage from "./pages/Calendar";
 import Insights from "./pages/Insights";
 import ImportData from "./pages/ImportData";
 import Account from "./pages/Account";
+import Disclaimer from "./pages/Disclaimer";
 
 export default function App() {
   return (
@@ -23,6 +24,7 @@ export default function App() {
         <Route path="/insights" element={<Insights />} />
         <Route path="/import" element={<ImportData />} />
         <Route path="/account" element={<Account />} />
+        <Route path="/disclaimer" element={<Disclaimer />} />
         <Route path="*" element={<Dashboard />} />
       </Routes>
     </Layout>

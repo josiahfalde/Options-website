@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import type { ReactNode } from "react";
 import { BRAND } from "../brand";
+import { DISCLAIMER_SHORT } from "../content/legal";
 import { useStore } from "../data/store";
 import { AuthButton } from "../auth/AuthButton";
 import { DemoBanner } from "../auth/DemoBanner";
@@ -100,6 +101,17 @@ export function Layout({ children }: { children: ReactNode }) {
         <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 md:px-8 md:py-8">
           {children}
         </main>
+
+        <footer className="border-t border-white/5 px-4 py-5 md:px-8">
+          <div className="mx-auto flex w-full max-w-7xl flex-col gap-2 text-[11px] leading-relaxed text-slate-500 sm:flex-row sm:items-center sm:justify-between">
+            <p className="max-w-xl">
+              {DISCLAIMER_SHORT} Trading options involves substantial risk of loss.
+            </p>
+            <NavLink to="/disclaimer" className="shrink-0 font-medium text-slate-400 hover:text-slate-200">
+              Full disclaimer →
+            </NavLink>
+          </div>
+        </footer>
       </div>
     </div>
   );
