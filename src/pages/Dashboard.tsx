@@ -27,7 +27,7 @@ import {
   computePortfolio,
   cumulativeCurve,
   monthlySeries,
-  realizedInTimeframe,
+  filterByTimeframe,
   TIMEFRAMES,
   type Timeframe,
   type TickerStat,
@@ -46,13 +46,30 @@ export default function Dashboard() {
   const [drillTicker, setDrillTicker] = useState<string | null>(null);
   const ct = useChartTheme();
 
-  const p = useMemo(() => computePortfolio(dataset), [dataset]);
-  const curve = useMemo(() => cumulativeCurve(dataset), [dataset]);
-  const months = useMemo(() => monthlySeries(dataset), [dataset]);
-  const tfRealized = useMemo(() => realizedInTimeframe(dataset, tf), [dataset, tf]);
+  const windowed = tf !== "ALL";
 
-  // Prior-period context for the hero: the most recent completed month's P&L
-  // and its change vs the month before — honest, derived from monthlySeries.
+  // Current / all-time portfolio — drives the snapshot cards (Mark-to-Market,
+  // Capital Deployed, holdings) and SPY alpha, which describe what you hold
+  // NOW and have no windowed version.
+  const pCur = useMemo(() => computePortfolio(dataset), [dataset]);
+
+  // Window-scoped dataset: trades filtered to the selected timeframe, with the
+  // capital base pinned to the full base so returns use the right denominator.
+  // Drives every flow/performance card + the charts.
+  const windowDs = useMemo(
+    () =>
+      windowed
+        ? { ...dataset, capitalBase: pCur.capitalBase, trades: filterByTimeframe(dataset.trades, tf) }
+        : dataset,
+    [dataset, tf, windowed, pCur.capitalBase]
+  );
+  const p = useMemo(() => (windowed ? computePortfolio(windowDs) : pCur), [windowed, windowDs, pCur]);
+  const curve = useMemo(() => cumulativeCurve(windowDs), [windowDs]);
+  const months = useMemo(() => monthlySeries(windowDs), [windowDs]);
+  const windowCount = windowDs.trades.length;
+
+  // MoM momentum for the hero — only on the all-time view (where `months` spans
+  // full history); a month-over-month delta on a short window is just noise.
   const lastMonth = months.length ? months[months.length - 1] : null;
   const prevMonth = months.length > 1 ? months[months.length - 2] : null;
   const momChange = lastMonth && prevMonth ? lastMonth.pl - prevMonth.pl : null;
@@ -103,6 +120,11 @@ export default function Dashboard() {
         />
       ) : (
         <>
+      {windowed && windowCount === 0 && (
+        <div className="rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-slate-400">
+          No trades in the last {tf}. Flow metrics show zero for this window — your current holdings below are unaffected.
+        </div>
+      )}
       {/* KPI grid — inverted pyramid: hero P&L top-left, then context metrics */}
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         {/* Hero: the single most important answer — all-time realized P&L */}
@@ -110,11 +132,11 @@ export default function Dashboard() {
           size="lg"
           className="col-span-2"
           icon={Wallet}
-          label="Realized P&L · all-time"
+          label={windowed ? `Realized P&L · last ${tf}` : "Realized P&L · all-time"}
           value={signed(p.realized)}
           tone={p.realized >= 0 ? "pos" : "neg"}
           delta={
-            momChange != null ? (
+            !windowed && momChange != null ? (
               <Delta
                 dir={deltaDir(momChange)}
                 value={`${signed(momChange, 0)} MoM`}
@@ -129,33 +151,35 @@ export default function Dashboard() {
               </span>
               <span>return on</span>
               <CapitalBaseEditor
-                capitalBase={p.capitalBase}
-                estimated={p.capitalEstimated}
+                capitalBase={pCur.capitalBase}
+                estimated={pCur.capitalEstimated}
                 onCommit={setCapitalBase}
               />
-              <span>
-                · {tf === "ALL" ? "all-time" : `${signed(tfRealized, 0)} in last ${tf}`}
-              </span>
+              <span>· {windowed ? `last ${tf}` : "all-time"}</span>
             </span>
           }
-          hint="Premium collected minus buybacks (cash basis). Matches your workbook's realized number. MoM compares your two most recent months."
+          hint="Premium collected minus buybacks (cash basis). Matches your workbook's realized number. Scoped to the selected timeframe."
         />
         <Kpi
           icon={Trophy}
           label="Win Rate"
-          value={pct(p.winRate, 0)}
+          value={p.resolvedCount ? pct(p.winRate, 0) : "—"}
           tone="pos"
           to="/insights"
-          sub={`${p.wins}W · ${p.losses}L · ${p.assignedCount} assigned of ${p.resolvedCount} resolved`}
-          hint="Share of resolved contracts where you kept net premium (expired, closed for profit, or assigned but premium kept)."
+          sub={
+            p.resolvedCount
+              ? `${p.wins}W · ${p.losses}L · ${p.assignedCount} assigned of ${p.resolvedCount} resolved`
+              : `No resolved contracts${windowed ? ` in last ${tf}` : ""}`
+          }
+          hint="Share of resolved contracts where you kept net premium (expired, closed for profit, or assigned but premium kept). Scoped to the selected timeframe."
         />
         <Kpi
           icon={Gauge}
           label="Annualized Yield"
-          value={pct(p.annualizedReturn, 1)}
+          value={windowCount ? pct(p.annualizedReturn, 1) : "—"}
           tone="gold"
           sub={`${pct(p.monthlyYield, 2)}/mo on capital · ${p.daysActive}d active`}
-          hint="Realized return on capital base, annualized from your first trade date — the real yield on deployed cash."
+          hint="Realized return on capital base, annualized — the real yield on deployed cash. Scoped to the selected timeframe."
         />
       </div>
 
@@ -163,46 +187,46 @@ export default function Dashboard() {
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <Kpi
           label="Alpha vs SPY"
-          value={p.hasSpy ? (p.alpha >= 0 ? "+" : "−") + pct(p.alpha, 1).replace(/[+-]/, "") : "—"}
-          tone={p.hasSpy ? (p.alpha >= 0 ? "pos" : "neg") : "neutral"}
+          value={pCur.hasSpy ? (pCur.alpha >= 0 ? "+" : "−") + pct(pCur.alpha, 1).replace(/[+-]/, "") : "—"}
+          tone={pCur.hasSpy ? (pCur.alpha >= 0 ? "pos" : "neg") : "neutral"}
           delta={
-            p.hasSpy ? (
-              <Delta dir={deltaDir(p.alpha)} value={pct(p.alpha, 1)} size="xs" />
+            pCur.hasSpy ? (
+              <Delta dir={deltaDir(pCur.alpha)} value={pct(pCur.alpha, 1)} size="xs" />
             ) : undefined
           }
           sub={
-            p.hasSpy ? (
-              <>You {pct(p.returnPct, 1)} vs SPY {pct(p.spyReturn, 1)} (trailing 12mo)</>
+            pCur.hasSpy ? (
+              <>You {pct(pCur.returnPct, 1)} vs SPY {pct(pCur.spyReturn, 1)} · trailing 12mo</>
             ) : (
               <Link to="/import" className="text-flux-300 hover:text-flux-200">
                 Set the SPY benchmark to compare →
               </Link>
             )
           }
-          hint="Your realized return minus SPY's trailing-12-month total return."
+          hint="Your all-time realized return minus SPY's trailing-12-month total return. Benchmark is fixed at trailing 12 months, so this card does not follow the timeframe selector."
         />
         <Kpi
           label="Premium Collected"
           value={usd(p.premiumCollected)}
           tone="pos"
           sub={`${usd(p.buybacks)} paid to buy back · ${p.contracts} contracts sold`}
-          hint="Total credits received from selling puts and calls, before buybacks."
+          hint="Total credits received from selling puts and calls, before buybacks. Scoped to the selected timeframe."
         />
         <Kpi
-          label="Mark-to-Market"
-          value={signed(p.mtm)}
-          tone={p.mtm >= 0 ? "pos" : "neg"}
-          delta={<Delta dir={deltaDir(p.unrealized)} value={`${signed(p.unrealized, 0)} open`} size="xs" />}
-          sub={`Realized ${signed(p.realized, 0)} + unrealized on open shares`}
-          hint="Realized premium plus the live gain/loss on shares you still hold (sharesHeld × lastPrice − cost)."
+          label="Mark-to-Market · current"
+          value={signed(pCur.mtm)}
+          tone={pCur.mtm >= 0 ? "pos" : "neg"}
+          delta={<Delta dir={deltaDir(pCur.unrealized)} value={`${signed(pCur.unrealized, 0)} open`} size="xs" />}
+          sub={`Realized ${signed(pCur.realized, 0)} + unrealized on open shares`}
+          hint="Realized premium plus the live gain/loss on shares you still hold (sharesHeld × lastPrice − cost). A live snapshot of your whole book — it always reflects now, not the selected timeframe."
         />
         <Kpi
-          label="Capital Deployed"
-          value={pct(p.deployedPct, 0)}
+          label="Capital Deployed · current"
+          value={pct(pCur.deployedPct, 0)}
           tone="gold"
           to="/radar"
-          sub={`${usd0(p.capitalDeployed)} at work · ${p.openContracts} open contracts`}
-          hint="Capital tied up in held shares plus open cash-secured-put collateral, as a share of your capital base."
+          sub={`${usd0(pCur.capitalDeployed)} at work · ${pCur.openContracts} open contracts`}
+          hint="Capital tied up in held shares plus open cash-secured-put collateral, as a share of your capital base. A current snapshot — it always reflects now, not the selected timeframe."
         />
       </div>
 
@@ -219,6 +243,11 @@ export default function Dashboard() {
             }
           />
           <div className="h-64">
+            {windowCount === 0 ? (
+              <div className="flex h-full items-center justify-center text-sm text-slate-500">
+                No activity in the last {tf}
+              </div>
+            ) : (
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={curve} margin={{ left: -18, right: 8, top: 6, bottom: 0 }}>
                 <defs>
@@ -253,12 +282,18 @@ export default function Dashboard() {
                 />
               </AreaChart>
             </ResponsiveContainer>
+            )}
           </div>
         </Card>
 
         <Card>
           <SectionTitle title="Monthly P&L" sub="Realized premium per month" />
           <div className="h-64">
+            {windowCount === 0 ? (
+              <div className="flex h-full items-center justify-center text-sm text-slate-500">
+                No activity in the last {tf}
+              </div>
+            ) : (
             <ResponsiveContainer width="100%" height="100%">
               <BarChart data={months} margin={{ left: -20, right: 4, top: 6, bottom: 0 }}>
                 <CartesianGrid strokeDasharray="3 3" stroke={ct.grid} vertical={false} />
@@ -284,6 +319,7 @@ export default function Dashboard() {
                 </Bar>
               </BarChart>
             </ResponsiveContainer>
+            )}
           </div>
         </Card>
       </div>
