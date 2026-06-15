@@ -6,8 +6,9 @@
 > Claude Code session resuming this project: read this file top to bottom first,
 > then open the Linear project for the live task board.**
 >
-> _Last updated: 2026-06-14 (Vercel hosting live; full UI overhaul; wheel-tagging;
-> legal pages; Brave OAuth fix; Google sign-in public; dashboard timeframe scoping)._
+> _Last updated: 2026-06-15 (Vercel hosting live; full UI overhaul; wheel-tagging;
+> legal pages; Brave OAuth fix; Google sign-in public; dashboard timeframe scoping;
+> multi-strategy support — per-strategy P&L + multi-leg spreads)._
 
 ---
 
@@ -139,6 +140,25 @@ settings row on signup. Apply with `supabase db push`.
 - **JF-26 — Dashboard timeframe scopes the whole page.** The timeframe selector now re-scopes
   flow cards + charts + By-Ticker to the window; snapshot cards (Mark-to-Market, Capital
   Deployed) stay "· current"; Alpha stays trailing-12mo; graceful empty-window states. (PR #13)
+- **JF-27 — Multi-strategy foundation (per-strategy P&L + multi-leg spreads).** Flywheel is no
+  longer Wheel-only. **Model:** `Trade.strategy` (predefined key OR custom bucket; null =
+  auto-detect) + `positionId` (groups spread legs into one position) + `optionType` + new leg
+  actions `STO/BTO/STC/BTC`; migration `0002`→`0003_strategy.sql` (**applied to remote DB
+  2026-06-15** — widens the `action` CHECK + nullable strategy/position_id/option_type cols).
+  **Compute (layered on the penny-validated wheel engine, NOT a rewrite):** `src/data/strategies.ts`
+  (predefined registry + custom buckets + `resolveStrategy()`); generalized "premium debit" from
+  `{BB}`→`{any non-assignment debit}` (provably identical on wheel-only data, so realized still
+  reconciles to the penny); wheel cycle/FIFO pairing guarded to wheel-native legs so spreads can't
+  pollute it; `computePositions()` (net credit/debit, max profit/loss, width, breakeven for
+  verticals + iron condors); `strategyBreakdown()` (per-strategy realized/premium/capital/ROI/share,
+  ranked best-first; Σ per-strategy realized === `computePortfolio().realized` to the penny).
+  **UI:** new **Strategies** page `/#/strategies` (Combined headline + ranked by-strategy comparison
+  + per-position drill-down with leg detail; nav under Overview) + `StrategySection` in the trade
+  drawer (auto-detect chip + override to predefined/custom + reset-to-auto, applied to all legs).
+  Demo seed seeded with anonymized spreads (PCS/CCS/iron condor + custom "Momentum Calls").
+  Verified: build clean, both themes, desktop+mobile (no overflow), reconciliation exact. (PR #14)
+  **Follow-up (not yet built):** multi-leg spread *entry form* + **tastytrade then robinhood CSV
+  importers** (model already supports both; the import session needs real broker CSV samples).
 
 ### ⬜ TODO (in order) — billing is the next milestone
 | Linear | Work |
@@ -151,7 +171,12 @@ settings row on signup. Apply with `supabase db push`.
 | JF-19 | Monitoring (Sentry) + analytics |
 | JF-20 | Launch: live-mode Stripe test + go live |
 
-_Done this session and removed from TODO: JF-11, JF-15, JF-16, JF-22, JF-23, JF-24, JF-25, JF-26._
+_Done and removed from TODO: JF-11, JF-15, JF-16, JF-22, JF-23, JF-24, JF-25, JF-26, JF-27._
+
+**Multi-strategy follow-ups (newly opened by JF-27, not yet ticketed):** (a) multi-leg spread
+**entry form** so spreads can be logged in-app; (b) **tastytrade → robinhood CSV importers**
+(user priority: tastytrade #1, robinhood #2). The data model already supports both; the importer
+session needs a real tastytrade transaction-history CSV export to build against.
 
 **NEXT STEP: JF-12 (Stripe planning).** Hosting (Vercel) + auth (public) are done, so Phase 3
 billing is unblocked. Stripe was "unparked" 2026-06-14 (tracked, not started). The user's
