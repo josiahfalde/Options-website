@@ -1,9 +1,33 @@
 // ---- Core domain types -----------------------------------------------------
-// A Trade is one row from the Wheel workbook (or a manual / CSV entry).
-// Credits = sold contracts (you collect premium). Debits = buybacks / assignments.
-
-export type TradeAction = "CSP" | "CC" | "BB" | "AAssignSTK";
+// A Trade is one leg / one transaction row — from the Wheel workbook, a manual
+// entry, or a broker CSV. Credits = premium collected; debits = premium paid /
+// assignments.
+//
+// Action vocabulary:
+//   Wheel-native (single-leg, the original model — accounting validated to the
+//   penny, do not disturb):
+//     CSP        sell a cash-secured put (credit)
+//     CC         sell a covered call (credit)
+//     BB         buy back a short option (debit)
+//     AAssignSTK put assigned → bought shares (debit; `invested` = capital)
+//   Generic option legs (added JF-27 for spreads / multi-leg strategies). These
+//   carry `optionType` and are grouped into one position via `positionId`:
+//     STO        sell-to-open  (credit)
+//     BTO        buy-to-open   (debit)
+//     STC        sell-to-close (credit)
+//     BTC        buy-to-close  (debit)
+export type TradeAction =
+  | "CSP"
+  | "CC"
+  | "BB"
+  | "AAssignSTK"
+  | "STO"
+  | "BTO"
+  | "STC"
+  | "BTC";
 export type TradeSide = "credit" | "debit";
+
+export type OptionType = "put" | "call";
 
 // Outcome status of a sold contract.
 export type TradeStatus =
@@ -37,6 +61,21 @@ export interface Trade {
    * merge / split); the WHEEL_EXCLUDED sentinel marks "not part of any wheel".
    */
   wheelId?: string | null;
+  // ---- Multi-strategy fields (JF-27) ----------------------------------------
+  /**
+   * Strategy bucket this trade belongs to (see strategies.ts). A predefined
+   * StrategyKey ("wheel", "put-credit-spread", …) OR an arbitrary custom-bucket
+   * label. null/undefined = auto-detected from structure (see resolveStrategy).
+   */
+  strategy?: string | null;
+  /**
+   * Groups legs of one multi-leg position (e.g. the two legs of a vertical
+   * spread). null/undefined = a standalone single-leg position. Mirrors the
+   * wheelId precedence pattern: legs sharing a positionId are one unit.
+   */
+  positionId?: string | null;
+  /** Put or call — set on generic option legs (STO/BTO/STC/BTC) for spreads. */
+  optionType?: OptionType | null;
 }
 
 export interface SpyBenchmark {

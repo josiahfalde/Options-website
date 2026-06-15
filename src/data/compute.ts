@@ -1,5 +1,6 @@
 import type { Dataset, Trade } from "../types";
 import { daysBetween, todayISO } from "../lib/format";
+import { indexByPosition, isWheelLeg, resolveStrategy } from "./strategies";
 
 // ============================================================================
 // Flywheel analytics engine.
@@ -17,6 +18,14 @@ import { daysBetween, todayISO } from "../lib/format";
 export const isCredit = (t: Trade) => t.side === "credit";
 export const isBuyback = (t: Trade) => t.action === "BB";
 export const isAssign = (t: Trade) => t.action === "AAssignSTK";
+// A "premium debit" = any cash-out option leg (buyback OR a spread's bought/
+// closed leg), but NOT a stock assignment (that's capital deployment, tracked
+// via `invested`). On wheel-only data this is exactly { BB }, so every realized
+// formula below is unchanged to the penny; spreads (BTO/BTC) now flow in too.
+export const isPremiumDebit = (t: Trade) => t.side === "debit" && !isAssign(t);
+// The original wheel-native short contracts (CSP/CC). Win-rate / FIFO pairing
+// is wheel-specific and must NOT pick up generic spread legs (STO/STC).
+const isWheelShort = (t: Trade) => t.action === "CSP" || t.action === "CC";
 
 export type Timeframe = "14d" | "30d" | "60d" | "90d" | "6M" | "1Y" | "YTD" | "ALL";
 
@@ -90,7 +99,7 @@ export function tickerStats(ds: Dataset): TickerStat[] {
   for (const ticker of tickers) {
     const tt = ds.trades.filter((t) => t.ticker === ticker);
     const credits = sum(tt.filter(isCredit).map((t) => t.amount));
-    const buybacks = sum(tt.filter(isBuyback).map((t) => t.amount));
+    const buybacks = sum(tt.filter(isPremiumDebit).map((t) => t.amount));
     const realized = credits - buybacks;
     const soldContracts = tt.filter(isCredit);
     const resolvedSet = soldContracts.filter((t) =>
@@ -147,7 +156,7 @@ function pairTickerPositions(tt: Trade[]): {
   wins: number;
 } {
   const credits = tt
-    .filter((t) => isCredit(t) && ["Expired", "Closed", "Assigned"].includes(t.status))
+    .filter((t) => isWheelShort(t) && ["Expired", "Closed", "Assigned"].includes(t.status))
     .slice()
     .sort((a, b) => a.date.localeCompare(b.date));
   const buybacks = tt
@@ -390,7 +399,7 @@ export function monthlySeries(ds: Dataset): MonthPoint[] {
     const m = t.date.slice(0, 7);
     const e = byMonth.get(m) ?? { premium: 0, buybacks: 0 };
     if (isCredit(t)) e.premium += t.amount;
-    else if (isBuyback(t)) e.buybacks += t.amount;
+    else if (isPremiumDebit(t)) e.buybacks += t.amount;
     byMonth.set(m, e);
   }
   const months = Array.from(byMonth.keys()).sort();
@@ -406,7 +415,7 @@ export function monthlySeries(ds: Dataset): MonthPoint[] {
 // Daily cumulative realized premium (smooth equity-style curve).
 export function cumulativeCurve(ds: Dataset): { date: string; value: number }[] {
   const evts = ds.trades
-    .filter((t) => isCredit(t) || isBuyback(t))
+    .filter((t) => isCredit(t) || isPremiumDebit(t))
     .slice()
     .sort((a, b) => a.date.localeCompare(b.date));
   let cum = 0;
@@ -546,9 +555,12 @@ export interface Wheel {
 /** Auto-detected cycle id for every trade, keyed by trade id. Pure + deterministic. */
 function autoCycleIds(ds: Dataset): Map<string, string> {
   const ids = new Map<string, string>();
-  const tickers = Array.from(new Set(ds.trades.map((t) => t.ticker)));
+  // Only wheel-native legs (CSP/CC/BB/assignment) form wheel cycles — generic
+  // spread legs on the same ticker must never be absorbed into a wheel.
+  const wheelTrades = ds.trades.filter(isWheelLeg);
+  const tickers = Array.from(new Set(wheelTrades.map((t) => t.ticker)));
   for (const ticker of tickers) {
-    const sorted = ds.trades
+    const sorted = wheelTrades
       .filter((t) => t.ticker === ticker)
       .slice()
       .sort((a, b) => a.date.localeCompare(b.date) || a.id.localeCompare(b.id));
@@ -592,6 +604,7 @@ export function computeWheels(ds: Dataset): Wheel[] {
   // Resolve each trade's final wheel key (or null when excluded).
   const groups = new Map<string, Trade[]>();
   for (const t of ds.trades) {
+    if (!isWheelLeg(t)) continue; // spreads / generic legs are not wheels
     if (t.wheelId === WHEEL_EXCLUDED) continue;
     const key = t.wheelId ?? auto.get(t.id);
     if (!key) continue;
@@ -681,10 +694,215 @@ export function openPositions(ds: Dataset, asOf = todayISO()): OpenPosition[] {
 export function realizedInTimeframe(ds: Dataset, tf: Timeframe, asOf = todayISO()): number {
   const trades = filterByTimeframe(ds.trades, tf, asOf);
   const credits = sum(trades.filter(isCredit).map((t) => t.amount));
-  const bb = sum(trades.filter(isBuyback).map((t) => t.amount));
+  const bb = sum(trades.filter(isPremiumDebit).map((t) => t.amount));
   return credits - bb;
 }
 
 function sum(xs: number[]): number {
   return xs.reduce((a, b) => a + b, 0);
+}
+
+// ============================================================================
+// Multi-strategy layer (JF-27). Sits ON TOP of the validated wheel engine —
+// it re-partitions the SAME trades by strategy, so combined realized always
+// reconciles to computePortfolio().realized to the penny.
+// ============================================================================
+
+// ---- positions (legs grouped into one unit) --------------------------------
+export interface Position {
+  id: string;
+  ticker: string;
+  strategy: string;
+  legs: Trade[];
+  isMultiLeg: boolean;
+  openDate: string;
+  closeDate: string | null;
+  open: boolean;
+  /** Entry net cash: + = net credit received, − = net debit paid (dollars). */
+  netCredit: number;
+  /** Cash-basis realized P&L (dollars) — same accounting as the wheel engine. */
+  realized: number;
+  maxProfit: number | null;
+  maxLoss: number | null;
+  /** Strike width in dollars (per-share width × shares), for verticals. */
+  width: number | null;
+  breakevens: number[];
+  /** Capital at risk while open (collateral / max loss / debit paid). */
+  capitalAtRisk: number;
+}
+
+const OPENING = new Set<Trade["action"]>(["CSP", "CC", "STO", "BTO"]);
+const isOpening = (t: Trade) => OPENING.has(t.action);
+
+/** Defined-risk metrics for a recognized vertical / condor; nulls otherwise. */
+function spreadMetrics(
+  legs: Trade[],
+  strategy: string,
+  netCredit: number
+): Pick<Position, "maxProfit" | "maxLoss" | "width" | "breakevens"> {
+  const none = { maxProfit: null, maxLoss: null, width: null, breakevens: [] as number[] };
+  const opens = legs.filter(isOpening);
+  const shares = opens[0]?.shares || 100;
+  const strikeOf = (t: Trade | undefined) => (t && t.strike ? t.strike : null);
+
+  const isVertical = [
+    "put-credit-spread",
+    "call-credit-spread",
+    "put-debit-spread",
+    "call-debit-spread",
+  ].includes(strategy);
+
+  if (isVertical && opens.length === 2) {
+    const shortLeg = opens.find((t) => t.side === "credit");
+    const longLeg = opens.find((t) => t.side === "debit");
+    const ks = strikeOf(shortLeg);
+    const kl = strikeOf(longLeg);
+    if (ks == null || kl == null) return none;
+    const widthPerShare = Math.abs(ks - kl);
+    const width = widthPerShare * shares;
+    const credit = netCredit >= 0;
+    const maxProfit = credit ? netCredit : width - Math.abs(netCredit);
+    const maxLoss = credit ? width - netCredit : Math.abs(netCredit);
+    // BE = anchor strike ± net premium per share. Puts lose to the downside (−),
+    // calls to the upside (+). Anchor = short strike (credit) or long strike (debit).
+    const isPut = strategy.startsWith("put");
+    const anchor = credit ? ks : kl;
+    const be = anchor + (isPut ? -1 : 1) * (Math.abs(netCredit) / shares);
+    return { maxProfit, maxLoss, width, breakevens: [round2(be)] };
+  }
+
+  if (strategy === "iron-condor") {
+    const puts = opens.filter((t) => t.optionType === "put").map((t) => t.strike || 0);
+    const calls = opens.filter((t) => t.optionType === "call").map((t) => t.strike || 0);
+    const putW = puts.length === 2 ? Math.abs(puts[0] - puts[1]) : 0;
+    const callW = calls.length === 2 ? Math.abs(calls[0] - calls[1]) : 0;
+    const width = Math.max(putW, callW) * shares;
+    if (!width) return none;
+    return { maxProfit: netCredit, maxLoss: width - netCredit, width, breakevens: [] };
+  }
+  return none;
+}
+
+function buildPosition(id: string, legs: Trade[], inWheel: Set<string>, byPos: Map<string, Trade[]>): Position {
+  const sorted = legs.slice().sort((a, b) => a.date.localeCompare(b.date));
+  const strategy = resolveStrategy(sorted[0], { byPosition: byPos, inWheel });
+  const credits = sum(legs.filter(isCredit).map((t) => t.amount));
+  const debits = sum(legs.filter(isPremiumDebit).map((t) => t.amount));
+  const realized = credits - debits;
+  // Entry net uses opening legs only (closes don't change the structure's net).
+  const opens = legs.filter(isOpening);
+  const netCredit =
+    sum(opens.filter((t) => t.side === "credit").map((t) => t.amount)) -
+    sum(opens.filter((t) => t.side === "debit").map((t) => t.amount));
+
+  // A position is open while any leg is still Open.
+  const open = legs.some((t) => t.status === "Open");
+  const closeDate = open ? null : sorted[sorted.length - 1].date;
+
+  const m = spreadMetrics(legs, strategy, netCredit);
+  // Capital at risk while open: defined-risk → maxLoss; short put → collateral;
+  // long option / covered call → debit paid / 0.
+  let capitalAtRisk = 0;
+  if (open) {
+    if (m.maxLoss != null) capitalAtRisk = m.maxLoss;
+    else if (strategy === "csp" || strategy === "wheel") {
+      const p = opens.find((t) => t.action === "CSP" || (t.action === "STO" && t.optionType === "put"));
+      capitalAtRisk = p?.strike ? p.strike * p.shares : 0;
+    } else if (strategy === "long-call" || strategy === "long-put") {
+      capitalAtRisk = Math.abs(netCredit);
+    }
+  }
+
+  return {
+    id,
+    ticker: sorted[0].ticker,
+    strategy,
+    legs: sorted,
+    isMultiLeg: legs.length > 1,
+    openDate: sorted[0].date,
+    closeDate,
+    open,
+    netCredit: round2(netCredit),
+    realized: round2(realized),
+    maxProfit: m.maxProfit != null ? round2(m.maxProfit) : null,
+    maxLoss: m.maxLoss != null ? round2(m.maxLoss) : null,
+    width: m.width,
+    breakevens: m.breakevens,
+    capitalAtRisk: round2(capitalAtRisk),
+  };
+}
+
+/**
+ * Partition every trade into positions: legs sharing a positionId form one
+ * multi-leg position; every other trade is its own single-leg position. The
+ * sum of position.realized over all positions == computePortfolio().realized.
+ */
+export function computePositions(ds: Dataset): Position[] {
+  const byPos = indexByPosition(ds.trades);
+  const inWheel = new Set(computeWheels(ds).flatMap((w) => w.tradeIds));
+  const positions: Position[] = [];
+  const consumed = new Set<string>();
+
+  for (const [pid, legs] of byPos) {
+    if (legs.length < 2) continue; // a lone positionId is effectively single-leg
+    legs.forEach((l) => consumed.add(l.id));
+    positions.push(buildPosition(pid, legs, inWheel, byPos));
+  }
+  for (const t of ds.trades) {
+    if (consumed.has(t.id)) continue;
+    positions.push(buildPosition(t.id, [t], inWheel, byPos));
+  }
+  return positions.sort((a, b) => b.openDate.localeCompare(a.openDate));
+}
+
+// ---- per-strategy breakdown (the headline of the Strategies page) ----------
+export interface StrategyBreakdown {
+  key: string;
+  realized: number;
+  premium: number; // credits collected
+  debits: number; // premium paid out
+  positions: number;
+  openPositions: number;
+  capitalAtRisk: number;
+  /** realized / total realized across all strategies (sign-aware share). */
+  shareOfRealized: number;
+  /** realized / capitalAtRisk — the "is this working?" return-on-risk signal. */
+  roi: number;
+  firstDate: string;
+  lastDate: string;
+}
+
+export function strategyBreakdown(ds: Dataset): StrategyBreakdown[] {
+  const positions = computePositions(ds);
+  const byStrat = new Map<string, Position[]>();
+  for (const p of positions) (byStrat.get(p.strategy) ?? byStrat.set(p.strategy, []).get(p.strategy)!).push(p);
+
+  const totalRealizedAbs = sum(positions.map((p) => Math.abs(p.realized))) || 1;
+  const out: StrategyBreakdown[] = [];
+  for (const [key, ps] of byStrat) {
+    const realized = sum(ps.map((p) => p.realized));
+    const premium = sum(ps.flatMap((p) => p.legs.filter(isCredit).map((t) => t.amount)));
+    const debits = sum(ps.flatMap((p) => p.legs.filter(isPremiumDebit).map((t) => t.amount)));
+    const capitalAtRisk = sum(ps.map((p) => p.capitalAtRisk));
+    const dates = ps.flatMap((p) => p.legs.map((t) => t.date)).sort();
+    out.push({
+      key,
+      realized: round2(realized),
+      premium: round2(premium),
+      debits: round2(debits),
+      positions: ps.length,
+      openPositions: ps.filter((p) => p.open).length,
+      capitalAtRisk: round2(capitalAtRisk),
+      shareOfRealized: realized / totalRealizedAbs,
+      roi: capitalAtRisk > 0 ? realized / capitalAtRisk : 0,
+      firstDate: dates[0] ?? "",
+      lastDate: dates[dates.length - 1] ?? "",
+    });
+  }
+  // Best performers first (by realized).
+  return out.sort((a, b) => b.realized - a.realized);
+}
+
+function round2(n: number): number {
+  return Math.round(n * 100) / 100;
 }

@@ -1,6 +1,7 @@
 import { Routes, Route } from "react-router-dom";
 import { Layout } from "./components/Layout";
 import Dashboard from "./pages/Dashboard";
+import Strategies from "./pages/Strategies";
 import Trades from "./pages/Trades";
 import Campaigns from "./pages/Campaigns";
 import Screener from "./pages/Screener";
@@ -18,6 +19,7 @@ export default function App() {
     <Layout>
       <Routes>
         <Route path="/" element={<Dashboard />} />
+        <Route path="/strategies" element={<Strategies />} />
         <Route path="/trades" element={<Trades />} />
         <Route path="/campaigns" element={<Campaigns />} />
         <Route path="/screener" element={<Screener />} />

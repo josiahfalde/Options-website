@@ -53,6 +53,9 @@ function normalize(raw: any): Dataset {
     thesis: t.thesis ?? null,
     grade: t.grade ?? null,
     wheelId: t.wheelId ?? t.wheel_id ?? null,
+    strategy: t.strategy ?? null,
+    positionId: t.positionId ?? t.position_id ?? null,
+    optionType: t.optionType ?? t.option_type ?? null,
   }));
   return {
     exportedAt: raw.exportedAt ?? new Date().toISOString().slice(0, 10),

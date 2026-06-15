@@ -26,6 +26,9 @@ interface TradeRow {
   thesis: string | null;
   grade: number | null;
   wheel_id: string | null;
+  strategy: string | null;
+  position_id: string | null;
+  option_type: Trade["optionType"];
 }
 
 function rowToTrade(r: TradeRow): Trade {
@@ -45,6 +48,9 @@ function rowToTrade(r: TradeRow): Trade {
     thesis: r.thesis,
     grade: r.grade,
     wheelId: r.wheel_id,
+    strategy: r.strategy,
+    positionId: r.position_id,
+    optionType: r.option_type ?? null,
   };
 }
 
@@ -65,6 +71,9 @@ function tradeToRow(t: Partial<Trade>): Record<string, unknown> {
   if (t.thesis !== undefined) row.thesis = t.thesis;
   if (t.grade !== undefined) row.grade = t.grade;
   if (t.wheelId !== undefined) row.wheel_id = t.wheelId;
+  if (t.strategy !== undefined) row.strategy = t.strategy;
+  if (t.positionId !== undefined) row.position_id = t.positionId;
+  if (t.optionType !== undefined) row.option_type = t.optionType;
   return row;
 }
 
