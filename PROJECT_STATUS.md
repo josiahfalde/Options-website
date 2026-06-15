@@ -6,7 +6,8 @@
 > Claude Code session resuming this project: read this file top to bottom first,
 > then open the Linear project for the live task board.**
 >
-> _Last updated: 2026-06-10 (Phase 2 complete: auth, Google OAuth, cloud test)._
+> _Last updated: 2026-06-14 (Vercel hosting live; full UI overhaul; wheel-tagging;
+> legal pages; Brave OAuth fix; Google sign-in public; dashboard timeframe scoping)._
 
 ---
 
@@ -103,22 +104,59 @@ settings row on signup. Apply with `supabase db push`.
 - **Light mode + theme toggle** — Tailwind class strategy + CSS-variable tokens; dark
   stays default & identical. (PR #5, `7113824`)
 
-### ⬜ TODO (in order)
+### ✅ Done (Phase 3 — hosting, product, polish: 2026-06-12 → 06-14)
+- **JF-11 — Hosting migrated to Vercel.** Live at **https://options-website-sandy.vercel.app/**
+  (auto-deploys on push to `main`; PR preview URLs). `vercel.json` (Vite preset, SPA
+  rewrite, security headers); playbook `docs/vercel-deploy.md`. No app code changed —
+  `base:"./"` + HashRouter were already portable. GitHub Pages kept as manual fallback. (PR #6)
+- **JF-23 — Brave/mobile Google sign-in fixed.** PKCE `code_verifier` was being dropped
+  from localStorage across the OAuth redirect on Brave mobile → silent bounce. Now:
+  `detectSessionInUrl:false` + manual OAuth return in `src/auth/oauthReturn.ts` (surfaces
+  real errors), and a **resilient `storage` adapter** in `src/lib/supabase.ts` that mirrors
+  the verifier into a first-party cookie. Confirmed working on the user's Brave phone. (PR #8)
+- **Google consent screen PUBLISHED (2026-06-13).** In production — **anyone** can Google
+  sign-in now (no longer test-users-only). Email + Google both fully public.
+- **JF-15 — Not-financial-advice disclaimer.** Footer (every page) + `/#/disclaimer` page +
+  signup acknowledgment. Copy in `src/content/legal.ts`. (PR #9)
+- **JF-16 — Terms of Service + Privacy Policy.** `/#/terms` + `/#/privacy`; footer links
+  Disclaimer · Terms · Privacy; copy in `src/content/legal.ts` (`LEGAL_CONTACT`). (PR #11)
+  ⚠️ Legal copy is a sensible default — get a lawyer's review before a hard public launch.
+- **JF-22 — Premium calendar + per-trade journal + drill-downs.** `/#/calendar` (P&L heatmap /
+  activity / upcoming toggle + day drill-down); per-trade journal notes (`Trade.note`, saved
+  via `updateTrade`); Dashboard By-Ticker drill-down. (PR #7) Calendar heatmap contrast fix
+  later (green-on-green washout → high-contrast neutral text + capped fill alpha, commit `7a40bd5`).
+- **JF-24 — Wheel-tagging.** Per-cycle wheels + auto-detect-then-confirm/adjust. Backend:
+  `Trade.wheelId` + migration `0002_wheel_id.sql` (applied) + `computeWheels()` in compute.ts
+  (auto-splits cycles, honors overrides; `WHEEL_EXCLUDED` sentinel; reconciles to the penny).
+  UI: Wheels page (suggested→Confirm, exclude/split/move) + trade-drawer Wheel section. (PR #10)
+- **JF-25 — Full research-grounded UI overhaul** (3 phases). Foundation:
+  `docs/ux-redesign-principles.md` (from a deep-research pass). New shared primitives in
+  `src/components/ui.tsx`: **`Delta`** (colorblind-safe gain/loss = sign+arrow, never color
+  alone) + `deltaDir`; upgraded **`Kpi`** (`size`, `delta`, drill-down `to`, `icon`); rebuilt
+  **`EmptyState`** (icon+copy+CTA). Nav regrouped (Overview/Positions/Research/Review/Data).
+  Inverted-pyramid Dashboard. Trades/Radar tables → stacked cards below `md` (no mobile
+  overflow). App-wide `.btn` focus ring. (PR #12)
+- **JF-26 — Dashboard timeframe scopes the whole page.** The timeframe selector now re-scopes
+  flow cards + charts + By-Ticker to the window; snapshot cards (Mark-to-Market, Capital
+  Deployed) stay "· current"; Alpha stays trailing-12mo; graceful empty-window states. (PR #13)
+
+### ⬜ TODO (in order) — billing is the next milestone
 | Linear | Work |
 |--------|------|
-| ~~JF-11~~ | ✅ **DONE — hosting migrated to Vercel** (live at options-website-sandy.vercel.app; auth + cloud writes verified) |
-| JF-12 | Stripe: account + define Free/Pro plans + what's gated |
+| **JF-12** | **Stripe: account + define Free/Pro plans + what's gated** ← next |
 | JF-13 | Stripe Checkout + Customer Portal |
 | JF-14 | Stripe webhook (signature-verified, idempotent) + entitlement gating |
-| JF-15 | Not-financial-advice disclaimer (high priority for a finance app) |
-| JF-16 | Terms of Service + Privacy Policy |
 | JF-17 | Business entity + Stripe Tax |
 | JF-18 | Final brand name + domain + HTTPS (see §6 for the domain checklist) |
 | JF-19 | Monitoring (Sentry) + analytics |
 | JF-20 | Launch: live-mode Stripe test + go live |
 
-**NEXT STEP: JF-12 (Stripe planning).** JF-11 is done — hosting is live on Vercel with
-serverless support, so Phase 3 billing is unblocked. JF-12 = create the Stripe account,
+_Done this session and removed from TODO: JF-11, JF-15, JF-16, JF-22, JF-23, JF-24, JF-25, JF-26._
+
+**NEXT STEP: JF-12 (Stripe planning).** Hosting (Vercel) + auth (public) are done, so Phase 3
+billing is unblocked. Stripe was "unparked" 2026-06-14 (tracked, not started). The user's
+preferred kickoff: design the Free vs Pro tiers + what's gated BEFORE writing code. JF-12 =
+create the Stripe account,
 define Free vs Pro tiers, and decide exactly what's gated.
 
 ---
