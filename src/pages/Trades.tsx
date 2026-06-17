@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { Search, Trash2, ArrowUpDown, StickyNote, BookOpen, CircleDashed, Sparkles, MinusCircle, RotateCcw, Receipt, Upload, ChevronRight } from "lucide-react";
+import { Search, Trash2, ArrowUpDown, StickyNote, BookOpen, CircleDashed, Sparkles, MinusCircle, RotateCcw, Receipt, Upload, ChevronRight, Layers } from "lucide-react";
 import { useStore } from "../data/store";
 import {
   filterByTimeframe,
@@ -7,9 +7,16 @@ import {
   type Timeframe,
   isCredit,
   computeWheels,
+  computePositions,
   WHEEL_EXCLUDED,
   type Wheel,
+  type Position,
 } from "../data/compute";
+import {
+  STRATEGY_DEFS,
+  strategyLabel,
+  strategyTone,
+} from "../data/strategies";
 import { Card, Pill, Delta, deltaDir, EmptyState } from "../components/ui";
 import { Drawer } from "../components/Drawer";
 import { NoteEditor } from "../components/NoteEditor";
@@ -63,8 +70,19 @@ export default function Trades() {
   };
 
   const wheels = useMemo(() => computeWheels(dataset), [dataset]);
+  const positions = useMemo(() => computePositions(dataset), [dataset]);
   const openTrade = openId ? dataset.trades.find((t) => t.id === openId) : undefined;
   const openWheel = openTrade ? wheels.find((w) => w.tradeIds.includes(openTrade.id)) : undefined;
+  const openPosition = openTrade
+    ? positions.find((p) => p.legs.some((l) => l.id === openTrade.id))
+    : undefined;
+
+  /** Apply a strategy to every leg of a position (keeps spreads consistent). */
+  function setStrategy(strategy: string | null) {
+    if (!openTrade) return;
+    const legs = openPosition ? openPosition.legs : [openTrade];
+    legs.forEach((l) => updateTrade(l.id, { strategy }));
+  }
 
   const net = credits - debits;
   const hasTrades = dataset.trades.length > 0;
@@ -250,9 +268,11 @@ export default function Trades() {
           <TradeDetail
             t={openTrade}
             wheel={openWheel}
+            position={openPosition}
             onSaveNote={(note) => updateTrade(openTrade.id, { note })}
             onExcludeWheel={() => updateTrade(openTrade.id, { wheelId: WHEEL_EXCLUDED })}
             onResetWheel={() => updateTrade(openTrade.id, { wheelId: null })}
+            onSetStrategy={setStrategy}
           />
         )}
       </Drawer>
@@ -441,15 +461,19 @@ function TradeCard({ t, onOpen, onDelete }: { t: Trade; onOpen: () => void; onDe
 function TradeDetail({
   t,
   wheel,
+  position,
   onSaveNote,
   onExcludeWheel,
   onResetWheel,
+  onSetStrategy,
 }: {
   t: Trade;
   wheel: Wheel | undefined;
+  position: Position | undefined;
   onSaveNote: (note: string | null) => void;
   onExcludeWheel: () => void;
   onResetWheel: () => void;
+  onSetStrategy: (strategy: string | null) => void;
 }) {
   const credit = t.side === "credit";
   const earn = parseNote(t.note).earn;
@@ -469,6 +493,9 @@ function TradeDetail({
         {t.invested != null && <Fact label="Invested" value={usd(t.invested)} tone="gold" />}
         {t.status && <Fact label="Status" value={t.status} />}
       </div>
+
+      {/* strategy bucket */}
+      <StrategySection trade={t} position={position} onSetStrategy={onSetStrategy} />
 
       {/* wheel membership */}
       <WheelSection trade={t} wheel={wheel} onExclude={onExcludeWheel} onReset={onResetWheel} />
@@ -490,6 +517,164 @@ function TradeDetail({
       </div>
     </div>
   );
+}
+
+const CUSTOM_OPTION = "__custom__";
+
+function StrategySection({
+  trade,
+  position,
+  onSetStrategy,
+}: {
+  trade: Trade;
+  position: Position | undefined;
+  onSetStrategy: (strategy: string | null) => void;
+}) {
+  // Effective strategy = the position's resolved strategy (auto-detected when
+  // the user hasn't set one). `trade.strategy` truthy = user-confirmed override.
+  const effective = position?.strategy ?? trade.strategy ?? "other";
+  const isAuto = !trade.strategy;
+  const tone = strategyTone(effective);
+  const isMultiLeg = !!position?.isMultiLeg;
+
+  const [customMode, setCustomMode] = useState(false);
+  const [customName, setCustomName] = useState("");
+
+  function applyCustom() {
+    const name = customName.trim();
+    if (!name) return;
+    onSetStrategy(name);
+    setCustomMode(false);
+    setCustomName("");
+  }
+
+  // The select reflects an explicit predefined choice; custom buckets sit in the
+  // free-text field instead, so the dropdown shows "Custom…" when one is active.
+  const selectValue = isAuto
+    ? ""
+    : STRATEGY_DEFS.some((d) => d.key === trade.strategy)
+    ? (trade.strategy as string)
+    : CUSTOM_OPTION;
+
+  return (
+    <div>
+      <div className="stat-label mb-2 flex items-center gap-1.5">
+        <Layers size={13} className="text-flux-400" />
+        Strategy
+      </div>
+
+      <div
+        className={cls(
+          "rounded-xl border p-3",
+          isAuto ? "border-dashed border-flux-500/25 bg-flux-500/[0.05]" : "border-white/10 bg-white/[0.03]"
+        )}
+      >
+        <div className="flex items-center justify-between gap-2">
+          <Pill tone={tone === "slate" ? "slate" : tone}>{strategyLabel(effective)}</Pill>
+          {isAuto ? (
+            <span className="flex items-center gap-1 text-[11px] font-medium text-flux-300">
+              <Sparkles size={12} />
+              Auto-detected
+            </span>
+          ) : (
+            <span className="text-[11px] font-medium text-slate-400">Confirmed</span>
+          )}
+        </div>
+
+        {isMultiLeg && (
+          <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
+            Part of a {position!.legs.length}-leg position — changing the strategy applies to all
+            legs so the spread stays consistent.
+          </p>
+        )}
+
+        {/* Override control */}
+        <div className="mt-3 flex flex-wrap items-center gap-2">
+          {customMode ? (
+            <>
+              <input
+                value={customName}
+                onChange={(e) => setCustomName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    applyCustom();
+                  }
+                }}
+                placeholder="Custom bucket name…"
+                autoFocus
+                className="input h-8 flex-1 py-0 text-xs"
+                aria-label="Custom strategy bucket name"
+              />
+              <button
+                onClick={applyCustom}
+                disabled={!customName.trim()}
+                className="btn-primary h-8 px-3 py-0 text-xs focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-flux-500/40 disabled:cursor-not-allowed disabled:opacity-50"
+              >
+                Save
+              </button>
+              <button
+                onClick={() => {
+                  setCustomMode(false);
+                  setCustomName("");
+                }}
+                className="btn h-8 border border-white/10 px-3 py-0 text-xs text-slate-300 hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-flux-500/40"
+              >
+                Cancel
+              </button>
+            </>
+          ) : (
+            <label className="relative inline-flex flex-1">
+              <span className="sr-only">Set strategy</span>
+              <select
+                value={selectValue}
+                onChange={(e) => {
+                  const v = e.target.value;
+                  if (v === "") onSetStrategy(null);
+                  else if (v === CUSTOM_OPTION) {
+                    setCustomName(isPredefined(trade.strategy) ? "" : trade.strategy ?? "");
+                    setCustomMode(true);
+                  } else onSetStrategy(v);
+                }}
+                className="input h-8 w-full py-0 text-xs"
+              >
+                <option value="">Auto-detect</option>
+                {STRATEGY_DEFS.map((d) => (
+                  <option key={d.key} value={d.key}>
+                    {d.label}
+                  </option>
+                ))}
+                <option value={CUSTOM_OPTION}>Custom bucket…</option>
+              </select>
+            </label>
+          )}
+        </div>
+
+        {!isAuto && !customMode && (
+          <button
+            onClick={() => onSetStrategy(null)}
+            className="btn mt-2.5 h-8 gap-1.5 border border-white/10 px-3 py-0 text-xs text-slate-200 hover:bg-white/5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-flux-500/40"
+            title="Return this trade to auto-detection"
+          >
+            <RotateCcw size={13} />
+            Reset to auto
+          </button>
+        )}
+
+        <p className="mt-2.5 text-[11px] leading-relaxed text-slate-500">
+          Compare every strategy's P&L on the{" "}
+          <a href="#/strategies" className="text-flux-400 hover:underline">
+            Strategies
+          </a>{" "}
+          page.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+function isPredefined(key: string | null | undefined): boolean {
+  return !!key && STRATEGY_DEFS.some((d) => d.key === key);
 }
 
 function WheelSection({

@@ -1,6 +1,7 @@
 import { NavLink } from "react-router-dom";
 import {
   LayoutDashboard,
+  Layers,
   Table2,
   CircleDashed,
   Calculator,
@@ -27,7 +28,10 @@ type NavGroup = { heading: string; items: NavItem[] };
 const NAV_GROUPS: NavGroup[] = [
   {
     heading: "Overview",
-    items: [{ to: "/", label: "Dashboard", icon: LayoutDashboard, end: true }],
+    items: [
+      { to: "/", label: "Dashboard", icon: LayoutDashboard, end: true },
+      { to: "/strategies", label: "Strategies", icon: Layers },
+    ],
   },
   {
     heading: "Positions",
