@@ -13,7 +13,7 @@ import {
   FolderOpen,
 } from "lucide-react";
 import { useStore } from "../data/store";
-import { parseWorkbook, parseFidelityCsv } from "../data/importXlsx";
+import { parseWorkbook, parseFidelityCsv, parseTastytradeCsv, isTastytradeCsv } from "../data/importXlsx";
 import { Card, Pill, SectionTitle } from "../components/ui";
 import { todayISO, cls, usd0 } from "../lib/format";
 import type { Trade, TradeAction } from "../types";
@@ -39,7 +39,10 @@ export default function ImportData() {
         flash(true, `Imported ${ds.trades.length} trades across ${Object.keys(ds.lastPrices).length} tickers.`);
       } else if (/\.csv$/i.test(file.name)) {
         const text = await file.text();
-        const { trades, suggestedCapitalBase } = parseFidelityCsv(text);
+        const tasty = isTastytradeCsv(text);
+        const { trades, suggestedCapitalBase } = tasty
+          ? parseTastytradeCsv(text, file.name)
+          : parseFidelityCsv(text);
         if (!trades.length) return flash(false, "Couldn't parse option trades from that CSV.");
         // The CSV has no cash balance; if no capital base is set yet, seed it
         // with the estimated peak collateral so yields aren't divided by ~$0.
@@ -52,11 +55,13 @@ export default function ImportData() {
           },
           { merge: true }
         );
+        const broker = tasty ? "tastytrade" : "Fidelity";
+        const baseHint = tasty ? "≈ total defined-risk" : "≈ peak put collateral";
         flash(
           true,
           setBase
-            ? `Added ${trades.length} trades. Set capital base to ${usd0(suggestedCapitalBase)} (≈ peak put collateral) — adjust below if needed.`
-            : `Added ${trades.length} trades from CSV.`
+            ? `Added ${trades.length} ${broker} trades. Set capital base to ${usd0(suggestedCapitalBase)} (${baseHint}) — adjust below if needed.`
+            : `Added ${trades.length} trades from ${broker} CSV.`
         );
       } else if (/\.json$/i.test(file.name)) {
         const ds = JSON.parse(await file.text());
@@ -162,8 +167,8 @@ export default function ImportData() {
           <FormatCard
             icon={<FileSpreadsheet size={15} className="text-sky-300" />}
             tag={<Pill tone="blue">.csv</Pill>}
-            title="Fidelity export"
-            desc="A broker CSV of option trades — added to whatever's already loaded."
+            title="Broker export"
+            desc="A tastytrade or Fidelity CSV — spreads grouped into positions, added to what's loaded."
           />
           <FormatCard
             icon={<FileJson size={15} className="text-slate-300" />}
@@ -250,7 +255,7 @@ export default function ImportData() {
               <ul className="mt-1 list-disc space-y-0.5 pl-4">
                 <li>User accounts &amp; cloud sync (Supabase)</li>
                 <li>Live prices &amp; auto SPY benchmark</li>
-                <li>More broker CSV formats (Schwab, IBKR, Robinhood)</li>
+                <li>More broker CSV formats (Robinhood next, then Schwab, IBKR)</li>
                 <li>Pre-trade thesis &amp; execution grading</li>
               </ul>
             </div>

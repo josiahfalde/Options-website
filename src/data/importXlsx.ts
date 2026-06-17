@@ -1,6 +1,6 @@
 import * as XLSX from "xlsx";
-import type { Dataset, Trade, TradeAction } from "../types";
-import { estimateCapitalBase } from "./compute";
+import type { Dataset, OptionType, Trade, TradeAction } from "../types";
+import { computePositions, estimateCapitalBase } from "./compute";
 
 // Mirrors tools/export_workbook.py — parses the per-company "<TICKER> Wheel"
 // sheets straight in the browser so you can drag-drop your workbook to refresh.
@@ -275,6 +275,219 @@ export function parseFidelityCsv(text: string): CsvImport {
   // Suggest a capital base using the same estimator the dashboard falls back to,
   // so the import toast and the dashboard always agree.
   return { trades, suggestedCapitalBase: estimateCapitalBase(trades) };
+}
+
+// ---- tastytrade CSV (Activity → Orders export) -----------------------------
+// A tastytrade order-history export. Columns:
+//   Symbol,Status,MarketOrFill,Price,TIF,Time,TimeStampAtType,Order #,Description
+// Quirks this parser handles:
+//   • The `Description` is a MULTI-LINE quoted field — one line per leg, e.g.
+//       "-1 Jun 17 0d 730 Put STO        (sell-to-open 730 put)
+//         1 Jun 17 0d 721 Put BTO"       (buy-to-open  721 put)   → a spread.
+//     So we tokenize the whole file respecting quoted newlines, not line-by-line.
+//   • There is NO trade-date column — only a time of day. But every leg encodes
+//     its expiry + days-to-expiry ("Jun 17 0d"), so trade date = expiry − DTE.
+//     The expiry's YEAR isn't in the file either; we infer it from the filename
+//     (tastytrade_activity_YYMMDD.csv) or fall back to today.
+//   • Price is a per-spread NET ("1.45 cr" / "2.61 db"), not per-leg. We attach
+//     the whole net to the leg whose side matches the order (credit→a sold leg,
+//     debit→a bought leg) and 0 to the rest, so the position's realized P&L and
+//     net credit/width/max-loss all come out exact even without per-leg fills.
+//   • Only `Filled` orders are real; Canceled/Received/Routed never executed.
+//   • Open and close orders for the same structure (same symbol/expiry/strikes/
+//     type) are grouped into ONE position via a shared positionId. Strategy is
+//     left null so the app auto-detects (put credit spread, iron condor, …) and
+//     the user can confirm/override.
+// Limitation: the orders export has no expiration/assignment settlement events,
+// so an opened position with no closing order is treated as Expired once its
+// expiry has passed (credit kept / debit lost) and Open before then.
+
+interface TtLeg {
+  qty: number; // signed contracts (− = short)
+  strike: number;
+  type: OptionType;
+  action: "STO" | "BTO" | "STC" | "BTC";
+  expiry: string; // YYYY-MM-DD
+  tradeDate: string; // expiry − DTE
+}
+
+interface TtOrder {
+  symbol: string;
+  legs: TtLeg[];
+  net: number; // per-share net price
+  direction: "credit" | "debit";
+  closing: boolean; // a close order (BTC/STC) vs an open (STO/BTO)
+  structKey: string; // groups open + close of the same structure
+}
+
+const MON3: Record<string, string> = {
+  jan: "01", feb: "02", mar: "03", apr: "04", may: "05", jun: "06",
+  jul: "07", aug: "08", sep: "09", oct: "10", nov: "11", dec: "12",
+};
+
+/** Shift an ISO date by N days (UTC-safe so it never drifts a day by timezone). */
+function shiftDaysISO(iso: string, deltaDays: number): string {
+  const [y, m, d] = iso.split("-").map(Number);
+  const dt = new Date(Date.UTC(y, m - 1, d));
+  dt.setUTCDate(dt.getUTCDate() + deltaDays);
+  return dt.toISOString().slice(0, 10);
+}
+
+/** Reference date for year inference — from a YYMMDD in the filename, else today. */
+function refDateFromName(fileName?: string): string {
+  const m = fileName?.match(/(\d{2})(\d{2})(\d{2})/);
+  if (m) return `20${m[1]}-${m[2]}-${m[3]}`;
+  return new Date().toISOString().slice(0, 10);
+}
+
+/** Full-text CSV tokenizer that keeps newlines inside quoted fields. */
+function parseCsvRecords(text: string): string[][] {
+  const records: string[][] = [];
+  let field = "";
+  let record: string[] = [];
+  let q = false;
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    if (q) {
+      if (ch === '"') {
+        if (text[i + 1] === '"') { field += '"'; i++; } else q = false;
+      } else field += ch;
+    } else if (ch === '"') q = true;
+    else if (ch === ",") { record.push(field); field = ""; }
+    else if (ch === "\r") { /* skip */ }
+    else if (ch === "\n") { record.push(field); field = ""; records.push(record); record = []; }
+    else field += ch;
+  }
+  if (field.length || record.length) { record.push(field); records.push(record); }
+  return records;
+}
+
+/** "-1 Jun 17 0d 730 Put STO" → a structured leg (null if it doesn't match). */
+function parseTtLeg(line: string, refDate: string): TtLeg | null {
+  const m = line
+    .trim()
+    .match(/^(-?\d+)\s+([A-Za-z]{3})\s+(\d{1,2})\s+(\d+)d\s+(\d+(?:\.\d+)?)\s+(Put|Call)\s+(STO|BTO|STC|BTC)$/i);
+  if (!m) return null;
+  const [, qty, mon, day, dte, strike, type, action] = m;
+  const mm = MON3[mon.toLowerCase()];
+  if (!mm) return null;
+  let expiry = `${refDate.slice(0, 4)}-${mm}-${day.padStart(2, "0")}`;
+  // Year roll: if that expiry lands far before the file date, it's next year.
+  if (expiry < shiftDaysISO(refDate, -180)) expiry = `${+refDate.slice(0, 4) + 1}-${mm}-${day.padStart(2, "0")}`;
+  return {
+    qty: parseInt(qty, 10),
+    strike: parseFloat(strike),
+    type: type.toLowerCase() === "put" ? "put" : "call",
+    action: action.toUpperCase() as TtLeg["action"],
+    expiry,
+    tradeDate: shiftDaysISO(expiry, -parseInt(dte, 10)),
+  };
+}
+
+export function isTastytradeCsv(text: string): boolean {
+  const head = text.slice(0, 500).toLowerCase();
+  return /timestampattype/.test(head) || /marketorfill/.test(head);
+}
+
+export function parseTastytradeCsv(text: string, fileName?: string): CsvImport {
+  const refDate = refDateFromName(fileName);
+  const records = parseCsvRecords(text);
+  if (!records.length) return { trades: [], suggestedCapitalBase: 0 };
+
+  const header = records[0].map((h) => h.toLowerCase().trim());
+  const col = (name: string) => header.findIndex((h) => h.includes(name));
+  const cSym = col("symbol");
+  const cStatus = col("status");
+  const cFill = col("marketorfill");
+  const cPrice = col("price");
+  const cDesc = col("description");
+  if (cSym < 0 || cStatus < 0 || cDesc < 0) return { trades: [], suggestedCapitalBase: 0 };
+
+  // 1. Parse every Filled order into a structured order.
+  const orders: TtOrder[] = [];
+  for (let i = 1; i < records.length; i++) {
+    const r = records[i];
+    if (!r || !r[cStatus]) continue;
+    if (!/filled/i.test(r[cStatus])) continue; // skip Canceled / Received / Routed
+
+    const legs = (r[cDesc] || "")
+      .split("\n")
+      .map((l) => parseTtLeg(l, refDate))
+      .filter((l): l is TtLeg => !!l);
+    if (!legs.length) continue;
+
+    // Net price + direction from MarketOrFill (fallback Price). Take the number
+    // adjacent to cr/db, so "STP 2.61 LMT 2.61 db" reads 2.61 db.
+    const priceStr = (cFill >= 0 && r[cFill]) || (cPrice >= 0 && r[cPrice]) || "";
+    const pm = String(priceStr).match(/(\d+(?:\.\d+)?)\s*(cr|db)\b/i);
+    if (!pm) continue; // no fill price — can't value it
+    const net = parseFloat(pm[1]);
+    const direction: "credit" | "debit" = /cr/i.test(pm[2]) ? "credit" : "debit";
+
+    const symbol = (r[cSym] || "").trim().toUpperCase();
+    const closing = legs.some((l) => l.action === "BTC" || l.action === "STC");
+    const strikes = [...new Set(legs.map((l) => l.strike))].sort((a, b) => a - b);
+    const types = [...new Set(legs.map((l) => l.type))].sort();
+    const structKey = `${symbol}|${legs[0].expiry}|${types.join(",")}|${strikes.join(",")}`;
+    orders.push({ symbol, legs, net, direction, closing, structKey });
+  }
+  if (!orders.length) return { trades: [], suggestedCapitalBase: 0 };
+
+  // 2. Which structures ever got a closing order? Drives open-leg status.
+  const closedStructs = new Set(orders.filter((o) => o.closing).map((o) => o.structKey));
+
+  // 3. Materialize legs → Trade rows. positionId = structKey so open + close group.
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  const isCreditAction = (a: TtLeg["action"]) => a === "STO" || a === "STC";
+  const trades: Trade[] = [];
+  let tid = 0;
+  for (const o of orders) {
+    const spreadQty = Math.max(1, ...o.legs.map((l) => Math.abs(l.qty)));
+    const netDollar = round2(o.net * 100 * spreadQty);
+    // Attach the whole net to the first leg matching the order direction.
+    const primary = o.legs.find((l) => (isCreditAction(l.action) ? "credit" : "debit") === o.direction);
+
+    for (const leg of o.legs) {
+      const side: Trade["side"] = isCreditAction(leg.action) ? "credit" : "debit";
+      const amount = leg === primary ? netDollar : 0;
+      let status: Trade["status"];
+      if (o.closing) status = "Closed";
+      else if (closedStructs.has(o.structKey)) status = "Closed";
+      else status = leg.expiry <= refDate ? "Expired" : "Open";
+      trades.push({
+        id: `tt-${tid++}`,
+        ticker: o.symbol,
+        side,
+        action: leg.action,
+        date: leg.tradeDate,
+        shares: Math.max(1, Math.abs(leg.qty)) * 100,
+        amount,
+        status,
+        strike: leg.strike,
+        expiry: leg.expiry,
+        optionType: leg.type,
+        positionId: o.structKey,
+        strategy: null, // auto-detect (put credit spread, iron condor, …)
+        invested: null,
+      });
+    }
+  }
+
+  trades.sort((a, b) => a.date.localeCompare(b.date) || a.ticker.localeCompare(b.ticker));
+
+  // Suggested capital base = total defined-risk (Σ max loss) of imported
+  // positions — a sane yield denominator for a spread book with no cash balance.
+  const positions = computePositions({
+    exportedAt: refDate,
+    capitalBase: 0,
+    lastPrices: {},
+    spy: { now: 0, year_ago: 0, year_ago_date: "" },
+    trades,
+  });
+  const suggestedCapitalBase = Math.round(
+    positions.reduce((a, p) => a + (p.maxLoss ?? 0), 0)
+  );
+  return { trades, suggestedCapitalBase };
 }
 
 // Fallback when the symbol column is blank: pull contract from the description,
