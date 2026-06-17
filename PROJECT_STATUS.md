@@ -159,6 +159,16 @@ settings row on signup. Apply with `supabase db push`.
   Verified: build clean, both themes, desktop+mobile (no overflow), reconciliation exact. (PR #14)
   **Follow-up (not yet built):** multi-leg spread *entry form* + **tastytrade then robinhood CSV
   importers** (model already supports both; the import session needs real broker CSV samples).
+- **JF-28 — tastytrade CSV importer.** Drag-drop a tastytrade "Activity → Orders" export
+  (`parseTastytradeCsv` in `src/data/importXlsx.ts`, auto-detected vs Fidelity via
+  `isTastytradeCsv`). Handles the multi-line quoted `Description` (one line per leg) with a
+  full-text CSV tokenizer; derives trade date from each leg's expiry − DTE (the file has no date
+  column) and the expiry year from the filename; only `Filled` orders; net cr/db attached to the
+  direction-matching leg so realized/net/width/max-loss are exact without per-leg fills; open +
+  close orders of the same structure grouped into one position (shared `positionId`), strategy
+  left null for auto-detect. Suggests a capital base = Σ defined-risk (max loss). Verified
+  end-to-end on a real export (two QQQ 0DTE put credit spreads → −$116 / −$190, BE $728.55,
+  max-loss $755 — exact). (PR #15) **Robinhood importer is next** (needs a sample RH CSV).
 
 ### ⬜ TODO (in order) — billing is the next milestone
 | Linear | Work |
