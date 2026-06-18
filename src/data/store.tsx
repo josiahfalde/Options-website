@@ -211,14 +211,35 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
       // Compute the merged/replaced trade list off current state.
       const base = datasetRef.current;
-      const seen = new Set(
-        base.trades.map((t) => `${t.ticker}|${t.date}|${t.action}|${t.amount}`)
-      );
-      const incoming = opts?.merge
-        ? next.trades.filter(
-            (t) => !seen.has(`${t.ticker}|${t.date}|${t.action}|${t.amount}`)
-          )
-        : next.trades;
+
+      // Identity key deliberately EXCLUDES status, so a re-imported rolling
+      // window that now shows a contract as Closed/Assigned/Expired can UPGRADE
+      // the stale "Open" we stored on a previous import (instead of being thrown
+      // away as a duplicate). This is what makes "re-import to update" work.
+      const idKey = (t: Trade) =>
+        `${t.ticker}|${t.date}|${t.action}|${t.strike ?? ""}|${t.expiry ?? ""}|${t.amount}`;
+      const isResolved = (s: Trade["status"]) => !!s && s !== "Open";
+
+      // On merge, split incoming into NEW rows to insert vs status-upgrades of
+      // rows we already have. (On replace, everything is just inserted.)
+      const existingByKey = new Map(base.trades.map((t) => [idKey(t), t] as const));
+      const statusUpdates: { id: string; patch: Partial<Trade> }[] = [];
+      const toInsert: Trade[] = [];
+      if (opts?.merge) {
+        for (const t of next.trades) {
+          const ex = existingByKey.get(idKey(t));
+          if (!ex) {
+            toInsert.push(t);
+          } else if (ex.status === "Open" && isResolved(t.status)) {
+            statusUpdates.push({
+              id: ex.id,
+              patch: { status: t.status, invested: t.invested ?? ex.invested },
+            });
+          }
+          // else: a true duplicate with no new info — skip.
+        }
+      }
+      const incoming = opts?.merge ? toInsert : next.trades;
 
       if (mode === "cloud" && supabase && user) {
         // Persist: on replace (not merge) clear existing first, then bulk insert.
@@ -230,6 +251,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
                 .delete()
                 .eq("user_id", user.id);
               if (delErr) throw delErr;
+            } else {
+              // Reconcile stale open contracts the new window now resolves.
+              for (const u of statusUpdates) await updateTradeRemote(supabase, u.id, u.patch);
             }
             await insertTrades(
               supabase,
@@ -257,17 +281,20 @@ export function StoreProvider({ children }: { children: ReactNode }) {
           }
         })();
       } else {
-        setDataset((d) =>
-          opts?.merge
-            ? {
-                ...d,
-                trades: [...d.trades, ...incoming],
-                lastPrices: { ...d.lastPrices, ...next.lastPrices },
-                capitalBase: next.capitalBase || d.capitalBase,
-                spy: next.spy.now ? next.spy : d.spy,
-              }
-            : next
-        );
+        setDataset((d) => {
+          if (!opts?.merge) return next;
+          const patchById = new Map(statusUpdates.map((u) => [u.id, u.patch] as const));
+          return {
+            ...d,
+            trades: [
+              ...d.trades.map((t) => (patchById.has(t.id) ? { ...t, ...patchById.get(t.id)! } : t)),
+              ...incoming,
+            ],
+            lastPrices: { ...d.lastPrices, ...next.lastPrices },
+            capitalBase: next.capitalBase || d.capitalBase,
+            spy: next.spy.now ? next.spy : d.spy,
+          };
+        });
       }
     },
     [mode, user]
