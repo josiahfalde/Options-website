@@ -364,11 +364,14 @@ function parseCsvRecords(text: string): string[][] {
 
 /** "-1 Jun 17 0d 730 Put STO" → a structured leg (null if it doesn't match). */
 function parseTtLeg(line: string, refDate: string): TtLeg | null {
+  // DTE token is "<N>d" (e.g. "0d", "5d") OR the word "Exp" on expiration day —
+  // tastytrade swaps in "Exp" for a 0-DTE contract on its expiry date.
   const m = line
     .trim()
-    .match(/^(-?\d+)\s+([A-Za-z]{3})\s+(\d{1,2})\s+(\d+)d\s+(\d+(?:\.\d+)?)\s+(Put|Call)\s+(STO|BTO|STC|BTC)$/i);
+    .match(/^(-?\d+)\s+([A-Za-z]{3})\s+(\d{1,2})\s+(\d+d|Exp)\s+(\d+(?:\.\d+)?)\s+(Put|Call)\s+(STO|BTO|STC|BTC)$/i);
   if (!m) return null;
   const [, qty, mon, day, dte, strike, type, action] = m;
+  const dteDays = /^exp$/i.test(dte) ? 0 : parseInt(dte, 10);
   const mm = MON3[mon.toLowerCase()];
   if (!mm) return null;
   let expiry = `${refDate.slice(0, 4)}-${mm}-${day.padStart(2, "0")}`;
@@ -380,7 +383,7 @@ function parseTtLeg(line: string, refDate: string): TtLeg | null {
     type: type.toLowerCase() === "put" ? "put" : "call",
     action: action.toUpperCase() as TtLeg["action"],
     expiry,
-    tradeDate: shiftDaysISO(expiry, -parseInt(dte, 10)),
+    tradeDate: shiftDaysISO(expiry, -dteDays),
   };
 }
 
