@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en" class="dark">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="./favicon.svg" />
@@ -16,10 +16,34 @@
       rel="stylesheet"
     />
     <title>Flywheel — Options Premium Analytics</title>
-    <script type="module" crossorigin src="./assets/index-By9YWIxy.js"></script>
-    <link rel="stylesheet" crossorigin href="./assets/index-7MGA9NDw.css">
+    <!-- Apply the saved/preferred theme BEFORE first paint to avoid a flash
+         of the wrong theme. Mirrors the logic in src/lib/theme.ts. -->
+    <script>
+      (function () {
+        try {
+          var stored = localStorage.getItem("flywheel-theme");
+          var theme =
+            stored === "light" || stored === "dark"
+              ? stored
+              : window.matchMedia &&
+                window.matchMedia("(prefers-color-scheme: light)").matches
+              ? "light"
+              : "dark";
+          var root = document.documentElement;
+          root.classList.add(theme);
+          root.style.colorScheme = theme;
+          document
+            .querySelector('meta[name="theme-color"]')
+            .setAttribute("content", theme === "light" ? "#f1f5f9" : "#080b12");
+        } catch (e) {
+          document.documentElement.classList.add("dark");
+        }
+      })();
+    </script>
+    <script type="module" crossorigin src="./assets/index-DrW_rSEP.js"></script>
+    <link rel="stylesheet" crossorigin href="./assets/index-DbcZHdhv.css">
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root"></div>
   </body>
 </html>
