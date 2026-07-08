@@ -207,7 +207,13 @@ export function parseFidelityCsv(text: string): CsvImport {
   const trades: Trade[] = [];
   let tid = 0;
   for (const evs of byContract.values()) {
-    evs.sort((a, b) => a.date.localeCompare(b.date));
+    // Same-day tie-break: the sell must precede its own close (the export lists
+    // newest-first, so a same-day open+close otherwise arrives reversed).
+    evs.sort(
+      (a, b) =>
+        a.date.localeCompare(b.date) ||
+        (a.kind === "sell" ? 0 : 1) - (b.kind === "sell" ? 0 : 1)
+    );
     const openSells: Trade[] = [];
     for (const e of evs) {
       if (e.kind === "sell") {
@@ -533,7 +539,7 @@ function splitCsv(line: string): string[] {
 function normalizeDate(s: string): string | null {
   s = s.trim();
   if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
-  const m = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})/);
+  const m = s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})/);
   if (m) {
     const [, mo, da, yr] = m;
     const y = yr.length === 2 ? "20" + yr : yr;
