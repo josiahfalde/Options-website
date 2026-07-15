@@ -1,4 +1,4 @@
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
   LayoutDashboard,
   Layers,
@@ -12,8 +12,9 @@ import {
   Cog,
   type LucideProps,
 } from "lucide-react";
-import type { ComponentType, ReactNode } from "react";
+import { useState, type ComponentType, type DragEvent, type ReactNode } from "react";
 import { BRAND } from "../brand";
+import { setPendingImportFile } from "../lib/pendingImport";
 import { DISCLAIMER_SHORT } from "../content/legal";
 import { useStore } from "../data/store";
 import { AuthButton } from "../auth/AuthButton";
@@ -63,8 +64,54 @@ const NAV_GROUPS: NavGroup[] = [
 // Flat list for the mobile top-nav (order preserved from the groups).
 const NAV_FLAT: NavItem[] = NAV_GROUPS.flatMap((g) => g.items);
 
+/** True only for a real OS file drag (not text/link drags within the page). */
+function isFileDrag(e: DragEvent) {
+  return !!e.dataTransfer && Array.from(e.dataTransfer.types).includes("Files");
+}
+
+/**
+ * Lets a file dragged from the OS be hovered over the "Import / Data" nav
+ * link to switch to the Import page mid-drag (like hovering a browser tab),
+ * so one continuous drag can land on the dropzone there. A drop directly on
+ * the link is also caught and handed to ImportData instead of letting the
+ * browser open the file.
+ */
+function useImportNavFileDrag() {
+  const navigate = useNavigate();
+  const location = useLocation();
+  const [dragOver, setDragOver] = useState(false);
+
+  const props = {
+    onDragEnter: (e: DragEvent) => {
+      if (!isFileDrag(e)) return;
+      e.preventDefault();
+      setDragOver(true);
+      if (location.pathname !== "/import") navigate("/import");
+    },
+    onDragOver: (e: DragEvent) => {
+      if (!isFileDrag(e)) return;
+      e.preventDefault(); // required so the link is a valid drop target
+    },
+    onDragLeave: (e: DragEvent) => {
+      // Ignore leaves into our own children (icon/label) to avoid flicker.
+      if (e.currentTarget.contains(e.relatedTarget as Node | null)) return;
+      setDragOver(false);
+    },
+    onDrop: (e: DragEvent) => {
+      if (!isFileDrag(e)) return;
+      e.preventDefault(); // never let the browser navigate to/open the file
+      setDragOver(false);
+      const f = e.dataTransfer.files[0];
+      if (f) setPendingImportFile(f);
+      if (location.pathname !== "/import") navigate("/import");
+    },
+  };
+  return { dragOver, props };
+}
+
 export function Layout({ children }: { children: ReactNode }) {
   const { isSeed } = useStore();
+  const importDrag = useImportNavFileDrag();
   return (
     <div className="flex min-h-screen">
       {/* Sidebar */}
@@ -82,8 +129,12 @@ export function Layout({ children }: { children: ReactNode }) {
                     key={n.to}
                     to={n.to}
                     end={n.end}
+                    {...(n.to === "/import" ? importDrag.props : {})}
                     className={({ isActive }) =>
-                      "nav-link" + (isActive ? " nav-link-active" : "")
+                      "nav-link" +
+                      (isActive || (n.to === "/import" && importDrag.dragOver)
+                        ? " nav-link-active"
+                        : "")
                     }
                   >
                     <n.icon size={18} strokeWidth={2} />
@@ -127,9 +178,10 @@ export function Layout({ children }: { children: ReactNode }) {
                 key={n.to}
                 to={n.to}
                 end={n.end}
+                {...(n.to === "/import" ? importDrag.props : {})}
                 className={({ isActive }) =>
                   "flex shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-flux-500/40 " +
-                  (isActive
+                  (isActive || (n.to === "/import" && importDrag.dragOver)
                     ? "bg-flux-500/10 text-flux-300 ring-1 ring-inset ring-flux-500/20"
                     : "text-slate-400 hover:text-slate-200")
                 }

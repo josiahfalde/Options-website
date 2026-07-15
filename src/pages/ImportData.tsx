@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Upload,
   FileSpreadsheet,
@@ -13,6 +13,7 @@ import {
   FolderOpen,
 } from "lucide-react";
 import { useStore } from "../data/store";
+import { subscribePendingImport } from "../lib/pendingImport";
 import { parseWorkbook, parseFidelityCsv, parseTastytradeCsv, isTastytradeCsv } from "../data/importXlsx";
 import { Card, Pill, SectionTitle } from "../components/ui";
 import { todayISO, cls, usd0 } from "../lib/format";
@@ -75,6 +76,12 @@ export default function ImportData() {
       flash(false, "Import failed: " + (e?.message ?? "unknown error"));
     }
   }
+
+  // A file dropped on the "Import / Data" nav link (see Layout) lands here.
+  // Ref so the subscription always calls the latest handleFile closure.
+  const handleFileRef = useRef(handleFile);
+  handleFileRef.current = handleFile;
+  useEffect(() => subscribePendingImport((f) => handleFileRef.current(f)), []);
 
   const hasOwnData = dataset.trades.length > 0;
 
