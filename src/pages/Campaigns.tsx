@@ -203,7 +203,7 @@ function WheelCard({
     return w.tradeIds
       .map((id) => byId.get(id))
       .filter((t): t is Trade => !!t)
-      .sort((a, b) => a.date.localeCompare(b.date));
+      .sort((a, b) => b.date.localeCompare(a.date));
   }, [dataset.trades, w.tradeIds]);
 
   return (
@@ -455,7 +455,7 @@ function ExcludedTrades({ trades, onReset }: { trades: Trade[]; onReset: (tid: s
         <ul className="space-y-1.5">
           {trades
             .slice()
-            .sort((a, b) => a.ticker.localeCompare(b.ticker) || a.date.localeCompare(b.date))
+            .sort((a, b) => a.ticker.localeCompare(b.ticker) || b.date.localeCompare(a.date))
             .map((t) => {
               const credit = t.side === "credit";
               return (
