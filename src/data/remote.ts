@@ -66,7 +66,7 @@ function tradeToRow(t: Partial<Trade>): Record<string, unknown> {
   if (t.invested !== undefined) row.invested = t.invested;
   if (t.status !== undefined) row.status = t.status;
   if (t.strike !== undefined) row.strike = t.strike;
-  if (t.expiry !== undefined) row.expiry = t.expiry;
+  if (t.expiry !== undefined) row.expiry = t.expiry || null; // "" is not a valid date
   if (t.note !== undefined) row.note = t.note;
   if (t.thesis !== undefined) row.thesis = t.thesis;
   if (t.grade !== undefined) row.grade = t.grade;
@@ -133,6 +133,13 @@ export async function deleteTradeRemote(sb: SupabaseClient, id: string): Promise
   if (error) throw error;
 }
 
+/** Bulk delete (used by the duplicate cleanup). RLS keeps it scoped to the user. */
+export async function deleteTradesRemote(sb: SupabaseClient, ids: string[]): Promise<void> {
+  if (ids.length === 0) return;
+  const { error } = await sb.from("trades").delete().in("id", ids);
+  if (error) throw error;
+}
+
 /** Bulk insert (used by the xlsx/CSV import). Returns the inserted trades. */
 export async function insertTrades(
   sb: SupabaseClient,
@@ -169,7 +176,9 @@ export async function upsertSettings(
   if (patch.capitalBase !== undefined) row.capital_base = patch.capitalBase;
   if (patch.spyNow !== undefined) row.spy_now = patch.spyNow;
   if (patch.spyYearAgo !== undefined) row.spy_year_ago = patch.spyYearAgo;
-  if (patch.spyYearAgoDate !== undefined) row.spy_year_ago_date = patch.spyYearAgoDate;
+  // "" would blow up Postgres's date column ("invalid input syntax for type
+  // date") and abort the whole import mid-persist — an unset date is null.
+  if (patch.spyYearAgoDate !== undefined) row.spy_year_ago_date = patch.spyYearAgoDate || null;
   const { error } = await sb.from("user_settings").upsert(row, { onConflict: "user_id" });
   if (error) throw error;
 }

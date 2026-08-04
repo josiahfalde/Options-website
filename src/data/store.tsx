@@ -14,6 +14,7 @@ import { supabase } from "../lib/supabase";
 import { useAuth } from "../auth/AuthProvider";
 import {
   deleteTradeRemote,
+  deleteTradesRemote,
   fetchDataset,
   insertTrade,
   insertTrades,
@@ -76,6 +77,105 @@ const emptyDataset = (): Dataset => ({
 
 export type StoreMode = "demo" | "cloud";
 
+/** What an import actually did, so the UI can report the truth. */
+export interface ImportSummary {
+  inserted: number;
+  updated: number; // stale "Open" rows upgraded to Closed/Assigned/Expired
+  skipped: number; // exact duplicates ignored
+}
+
+// Identity key deliberately EXCLUDES status, so a re-imported rolling
+// window that now shows a contract as Closed/Assigned/Expired can UPGRADE
+// the stale "Open" we stored on a previous import (instead of being thrown
+// away as a duplicate). This is what makes "re-import to update" work.
+const mergeKey = (t: Trade) =>
+  `${t.ticker}|${t.date}|${t.action}|${t.strike ?? ""}|${t.expiry ?? ""}|${t.amount}`;
+const isResolved = (s: Trade["status"]) => !!s && s !== "Open";
+
+interface MergePlan {
+  toInsert: Trade[];
+  statusUpdates: { id: string; patch: Partial<Trade> }[];
+  skipped: number;
+}
+
+/**
+ * Split incoming trades into NEW rows vs status-upgrades vs duplicates,
+ * measured against `existing`. Count-aware: each existing row absorbs at most
+ * one incoming duplicate, so a book that legitimately contains two identical
+ * fills still imports both the first time.
+ */
+function planMerge(existing: Trade[], incoming: Trade[]): MergePlan {
+  const byKey = new Map<string, Trade[]>();
+  for (const t of existing) {
+    const k = mergeKey(t);
+    const arr = byKey.get(k);
+    if (arr) arr.push(t);
+    else byKey.set(k, [t]);
+  }
+  const plan: MergePlan = { toInsert: [], statusUpdates: [], skipped: 0 };
+  for (const t of incoming) {
+    const ex = byKey.get(mergeKey(t))?.shift();
+    if (!ex) {
+      plan.toInsert.push(t);
+    } else if (ex.status === "Open" && isResolved(t.status)) {
+      plan.statusUpdates.push({
+        id: ex.id,
+        patch: { status: t.status, invested: t.invested ?? ex.invested },
+      });
+    } else {
+      plan.skipped++; // a true duplicate with no new info
+    }
+  }
+  return plan;
+}
+
+/**
+ * Find redundant copies of the same trade so they can be deleted.
+ * Two passes:
+ *   1. Rows identical on ticker/date/action/amount/shares/strike/expiry/status
+ *      — the signature of the same file imported twice. Keeps the copy carrying
+ *      user metadata (note/thesis/grade/wheel tag), drops the rest.
+ *   2. A strike-less row (workbook-era import) shadowed by a strike-carrying
+ *      row of the same ticker/date/action/amount — the signature of a broker
+ *      CSV re-importing trades first loaded from the Wheel workbook. The bare
+ *      row is dropped unless it carries user metadata.
+ */
+export function findDuplicateTradeIds(trades: Trade[]): string[] {
+  const hasMeta = (t: Trade) => !!(t.note || t.thesis || t.grade || t.wheelId);
+  const dupes = new Set<string>();
+
+  const strict = new Map<string, Trade[]>();
+  for (const t of trades) {
+    const k = `${t.ticker}|${t.date}|${t.side}|${t.action}|${t.amount}|${t.shares}|${t.strike ?? ""}|${t.expiry ?? ""}|${t.status}`;
+    const arr = strict.get(k);
+    if (arr) arr.push(t);
+    else strict.set(k, [t]);
+  }
+  for (const group of strict.values()) {
+    if (group.length < 2) continue;
+    const keep = group.find(hasMeta) ?? group[0];
+    for (const t of group) if (t !== keep) dupes.add(t.id);
+  }
+
+  const loose = new Map<string, Trade[]>();
+  for (const t of trades) {
+    if (dupes.has(t.id)) continue;
+    const k = `${t.ticker}|${t.date}|${t.side}|${t.action}|${t.amount}`;
+    const arr = loose.get(k);
+    if (arr) arr.push(t);
+    else loose.set(k, [t]);
+  }
+  for (const group of loose.values()) {
+    if (group.length < 2) continue;
+    const withStrike = group.filter((t) => t.strike != null || t.expiry != null);
+    const bare = group.filter((t) => t.strike == null && t.expiry == null && !hasMeta(t));
+    // one shadowed bare row per strike-carrying row, never more
+    for (const t of bare.slice(0, withStrike.length)) dupes.add(t.id);
+  }
+
+  return [...dupes];
+}
+
 interface StoreCtx {
   dataset: Dataset;
   isSeed: boolean;
@@ -85,7 +185,9 @@ interface StoreCtx {
   addTrade: (t: Omit<Trade, "id">) => void;
   updateTrade: (id: string, patch: Partial<Trade>) => void;
   deleteTrade: (id: string) => void;
-  replaceDataset: (ds: Dataset, opts?: { merge?: boolean }) => void;
+  replaceDataset: (ds: Dataset, opts?: { merge?: boolean }) => Promise<ImportSummary>;
+  /** Delete redundant copies of the same trade (see findDuplicateTradeIds). */
+  removeDuplicates: () => Promise<number>;
   setCapitalBase: (n: number) => void;
   setPrice: (ticker: string, price: number) => void;
   setSpy: (now: number, yearAgo: number, yearAgoDate: string) => void;
@@ -204,101 +306,115 @@ export function StoreProvider({ children }: { children: ReactNode }) {
   );
 
   const replaceDataset = useCallback(
-    (ds: Dataset, opts?: { merge?: boolean }) => {
+    async (ds: Dataset, opts?: { merge?: boolean }): Promise<ImportSummary> => {
       setIsSeed(false);
       setError(null);
       const next = normalize(ds);
 
-      // Compute the merged/replaced trade list off current state.
-      const base = datasetRef.current;
-
-      // Identity key deliberately EXCLUDES status, so a re-imported rolling
-      // window that now shows a contract as Closed/Assigned/Expired can UPGRADE
-      // the stale "Open" we stored on a previous import (instead of being thrown
-      // away as a duplicate). This is what makes "re-import to update" work.
-      const idKey = (t: Trade) =>
-        `${t.ticker}|${t.date}|${t.action}|${t.strike ?? ""}|${t.expiry ?? ""}|${t.amount}`;
-      const isResolved = (s: Trade["status"]) => !!s && s !== "Open";
-
-      // On merge, split incoming into NEW rows to insert vs status-upgrades of
-      // rows we already have. (On replace, everything is just inserted.)
-      const existingByKey = new Map(base.trades.map((t) => [idKey(t), t] as const));
-      const statusUpdates: { id: string; patch: Partial<Trade> }[] = [];
-      const toInsert: Trade[] = [];
-      if (opts?.merge) {
-        for (const t of next.trades) {
-          const ex = existingByKey.get(idKey(t));
-          if (!ex) {
-            toInsert.push(t);
-          } else if (ex.status === "Open" && isResolved(t.status)) {
-            statusUpdates.push({
-              id: ex.id,
-              patch: { status: t.status, invested: t.invested ?? ex.invested },
-            });
-          }
-          // else: a true duplicate with no new info — skip.
-        }
-      }
-      const incoming = opts?.merge ? toInsert : next.trades;
-
       if (mode === "cloud" && supabase && user) {
-        // Persist: on replace (not merge) clear existing first, then bulk insert.
-        (async () => {
-          try {
-            if (!opts?.merge) {
-              const { error: delErr } = await supabase
-                .from("trades")
-                .delete()
-                .eq("user_id", user.id);
-              if (delErr) throw delErr;
-            } else {
-              // Reconcile stale open contracts the new window now resolves.
-              for (const u of statusUpdates) await updateTradeRemote(supabase, u.id, u.patch);
-            }
+        // Persist first, then reflect what the server actually holds. The
+        // caller awaits this, so success is only reported once it's saved.
+        try {
+          let summary: ImportSummary;
+          if (!opts?.merge) {
+            // replace: clear existing, then bulk insert everything
+            const { error: delErr } = await supabase
+              .from("trades")
+              .delete()
+              .eq("user_id", user.id);
+            if (delErr) throw delErr;
             await insertTrades(
               supabase,
               user.id,
-              incoming.map(({ id: _id, ...rest }) => rest)
+              next.trades.map(({ id: _id, ...rest }) => rest)
             );
-            // settings + prices
-            await upsertSettings(supabase, user.id, {
-              capitalBase: next.capitalBase || base.capitalBase,
-              spyNow: next.spy.now || base.spy.now,
-              spyYearAgo: next.spy.year_ago || base.spy.year_ago,
-              spyYearAgoDate: next.spy.year_ago_date || base.spy.year_ago_date,
-            });
-            for (const [ticker, price] of Object.entries({
-              ...base.lastPrices,
-              ...next.lastPrices,
-            })) {
-              await upsertPrice(supabase, user.id, ticker, price as number);
-            }
-            // reflect authoritative server ids
-            const ds2 = await fetchDataset(supabase, user.id);
-            setDataset(ds2);
-          } catch (e: any) {
-            setError(e?.message ?? "Import failed.");
+            summary = { inserted: next.trades.length, updated: 0, skipped: 0 };
+          } else {
+            // merge: dedupe against what the DATABASE holds right now — never
+            // against local state, which can lag mid-refresh and would let a
+            // re-imported file double-insert every trade.
+            const fresh = await fetchDataset(supabase, user.id);
+            const plan = planMerge(fresh.trades, next.trades);
+            for (const u of plan.statusUpdates) await updateTradeRemote(supabase, u.id, u.patch);
+            await insertTrades(
+              supabase,
+              user.id,
+              plan.toInsert.map(({ id: _id, ...rest }) => rest)
+            );
+            summary = {
+              inserted: plan.toInsert.length,
+              updated: plan.statusUpdates.length,
+              skipped: plan.skipped,
+            };
           }
-        })();
-      } else {
-        setDataset((d) => {
-          if (!opts?.merge) return next;
-          const patchById = new Map(statusUpdates.map((u) => [u.id, u.patch] as const));
-          return {
-            ...d,
-            trades: [
-              ...d.trades.map((t) => (patchById.has(t.id) ? { ...t, ...patchById.get(t.id)! } : t)),
-              ...incoming,
-            ],
-            lastPrices: { ...d.lastPrices, ...next.lastPrices },
-            capitalBase: next.capitalBase || d.capitalBase,
-            spy: next.spy.now ? next.spy : d.spy,
-          };
-        });
+          // settings + prices
+          const base = datasetRef.current;
+          await upsertSettings(supabase, user.id, {
+            capitalBase: next.capitalBase || base.capitalBase,
+            spyNow: next.spy.now || base.spy.now,
+            spyYearAgo: next.spy.year_ago || base.spy.year_ago,
+            spyYearAgoDate: next.spy.year_ago_date || base.spy.year_ago_date,
+          });
+          for (const [ticker, price] of Object.entries({
+            ...base.lastPrices,
+            ...next.lastPrices,
+          })) {
+            await upsertPrice(supabase, user.id, ticker, price as number);
+          }
+          // reflect authoritative server ids
+          const ds2 = await fetchDataset(supabase, user.id);
+          setDataset(ds2);
+          return summary;
+        } catch (e: any) {
+          setError(e?.message ?? "Import failed.");
+          throw e;
+        }
       }
+
+      // demo/local
+      if (!opts?.merge) {
+        setDataset(next);
+        return { inserted: next.trades.length, updated: 0, skipped: 0 };
+      }
+      const plan = planMerge(datasetRef.current.trades, next.trades);
+      const patchById = new Map(plan.statusUpdates.map((u) => [u.id, u.patch] as const));
+      setDataset((d) => ({
+        ...d,
+        trades: [
+          ...d.trades.map((t) => (patchById.has(t.id) ? { ...t, ...patchById.get(t.id)! } : t)),
+          ...plan.toInsert,
+        ],
+        lastPrices: { ...d.lastPrices, ...next.lastPrices },
+        capitalBase: next.capitalBase || d.capitalBase,
+        spy: next.spy.now ? next.spy : d.spy,
+      }));
+      return {
+        inserted: plan.toInsert.length,
+        updated: plan.statusUpdates.length,
+        skipped: plan.skipped,
+      };
     },
     [mode, user]
   );
+
+  const removeDuplicates = useCallback(async (): Promise<number> => {
+    const ids = findDuplicateTradeIds(datasetRef.current.trades);
+    if (ids.length === 0) return 0;
+    setIsSeed(false);
+    const drop = new Set(ids);
+    const prev = datasetRef.current;
+    setDataset((d) => ({ ...d, trades: d.trades.filter((t) => !drop.has(t.id)) }));
+    if (mode === "cloud" && supabase && user) {
+      try {
+        await deleteTradesRemote(supabase, ids);
+      } catch (e: any) {
+        setDataset(prev); // revert
+        setError(e?.message ?? "Could not remove duplicates.");
+        throw e;
+      }
+    }
+    return ids.length;
+  }, [mode, user]);
 
   const setCapitalBase = useCallback(
     (n: number) => {
@@ -365,6 +481,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       updateTrade,
       deleteTrade,
       replaceDataset,
+      removeDuplicates,
       setCapitalBase,
       setPrice,
       setSpy,
@@ -381,6 +498,7 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       updateTrade,
       deleteTrade,
       replaceDataset,
+      removeDuplicates,
       setCapitalBase,
       setPrice,
       setSpy,
