@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import {
   Upload,
   FileSpreadsheet,
@@ -11,8 +11,9 @@ import {
   FileJson,
   PencilLine,
   FolderOpen,
+  CopyMinus,
 } from "lucide-react";
-import { useStore } from "../data/store";
+import { findDuplicateTradeIds, useStore } from "../data/store";
 import { subscribePendingImport } from "../lib/pendingImport";
 import { parseWorkbook, parseFidelityCsv, parseTastytradeCsv, isTastytradeCsv } from "../data/importXlsx";
 import { Card, Pill, SectionTitle } from "../components/ui";
@@ -20,11 +21,26 @@ import { todayISO, cls, usd0 } from "../lib/format";
 import type { Trade, TradeAction } from "../types";
 
 export default function ImportData() {
-  const { dataset, replaceDataset, addTrade, setCapitalBase, setPrice, setSpy, resetToSeed, clearAll } =
-    useStore();
+  const {
+    dataset,
+    replaceDataset,
+    removeDuplicates,
+    addTrade,
+    setCapitalBase,
+    setPrice,
+    setSpy,
+    resetToSeed,
+    clearAll,
+  } = useStore();
   const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
   const [drag, setDrag] = useState(false);
+  const [importing, setImporting] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
+  // Ref, not state: handleFile can fire again before React re-renders, and a
+  // second import racing the first is exactly how trades get double-inserted.
+  const busyRef = useRef(false);
+
+  const dupCount = useMemo(() => findDuplicateTradeIds(dataset.trades).length, [dataset.trades]);
 
   const flash = (ok: boolean, text: string) => {
     setMsg({ ok, text });
@@ -32,11 +48,14 @@ export default function ImportData() {
   };
 
   async function handleFile(file: File) {
+    if (busyRef.current) return;
+    busyRef.current = true;
+    setImporting(true);
     try {
       if (/\.xlsx$/i.test(file.name)) {
         const ds = await parseWorkbook(file);
         if (!ds.trades.length) return flash(false, "No Wheel sheets found in that workbook.");
-        replaceDataset(ds);
+        await replaceDataset(ds);
         flash(true, `Imported ${ds.trades.length} trades across ${Object.keys(ds.lastPrices).length} tickers.`);
       } else if (/\.csv$/i.test(file.name)) {
         const text = await file.text();
@@ -48,32 +67,40 @@ export default function ImportData() {
         // The CSV has no cash balance; if no capital base is set yet, seed it
         // with the estimated peak collateral so yields aren't divided by ~$0.
         const setBase = !dataset.capitalBase && suggestedCapitalBase > 0;
-        replaceDataset(
+        const res = await replaceDataset(
           {
             ...dataset,
-            trades: [...dataset.trades, ...trades],
+            trades,
             capitalBase: dataset.capitalBase || suggestedCapitalBase,
           },
           { merge: true }
         );
         const broker = tasty ? "tastytrade" : "Fidelity";
         const baseHint = tasty ? "≈ total defined-risk" : "≈ peak put collateral";
+        const parts = [];
+        if (res.inserted) parts.push(`added ${res.inserted} new trade${res.inserted === 1 ? "" : "s"}`);
+        if (res.updated) parts.push(`updated ${res.updated} status${res.updated === 1 ? "" : "es"}`);
+        if (res.skipped) parts.push(`skipped ${res.skipped} duplicate${res.skipped === 1 ? "" : "s"}`);
         flash(
           true,
-          setBase
-            ? `Added ${trades.length} ${broker} trades. Set capital base to ${usd0(suggestedCapitalBase)} (${baseHint}) — adjust below if needed.`
-            : `Added ${trades.length} trades from ${broker} CSV.`
+          `${broker} CSV: ${parts.join(", ") || "nothing new — all trades were already imported"}.` +
+            (setBase
+              ? ` Set capital base to ${usd0(suggestedCapitalBase)} (${baseHint}) — adjust below if needed.`
+              : "")
         );
       } else if (/\.json$/i.test(file.name)) {
         const ds = JSON.parse(await file.text());
         if (!ds.trades?.length) return flash(false, "That JSON has no trades.");
-        replaceDataset(ds);
+        await replaceDataset(ds);
         flash(true, `Loaded ${ds.trades.length} trades from JSON.`);
       } else {
         flash(false, "Drop a .xlsx workbook, a broker .csv, or a Flywheel .json export.");
       }
     } catch (e: any) {
       flash(false, "Import failed: " + (e?.message ?? "unknown error"));
+    } finally {
+      busyRef.current = false;
+      setImporting(false);
     }
   }
 
@@ -122,14 +149,15 @@ export default function ImportData() {
             e.preventDefault();
             setDrag(false);
             const f = e.dataTransfer.files[0];
-            if (f) handleFile(f);
+            if (f && !importing) handleFile(f);
           }}
-          onClick={() => fileRef.current?.click()}
+          onClick={() => !importing && fileRef.current?.click()}
           role="button"
           tabIndex={0}
           aria-label="Upload a workbook, CSV, or JSON file"
+          aria-busy={importing}
           onKeyDown={(e) => {
-            if (e.key === "Enter" || e.key === " ") {
+            if ((e.key === "Enter" || e.key === " ") && !importing) {
               e.preventDefault();
               fileRef.current?.click();
             }
@@ -152,10 +180,12 @@ export default function ImportData() {
             <Upload className="text-flux-400" size={28} />
           </div>
           <div className="mt-4 text-base font-semibold text-slate-100">
-            {drag ? "Drop to import" : "Drag a file here, or browse"}
+            {importing ? "Importing…" : drag ? "Drop to import" : "Drag a file here, or browse"}
           </div>
           <div className="mt-1 text-sm text-slate-400">
-            We'll detect the format automatically and show you what came in.
+            {importing
+              ? "Saving your trades — hang tight, re-importing the same file never duplicates."
+              : "We'll detect the format automatically and show you what came in."}
           </div>
           <span className="btn-primary pointer-events-none mt-4">
             <FolderOpen size={16} />
@@ -247,6 +277,28 @@ export default function ImportData() {
             </button>
             <button onClick={resetToSeed} className="btn-ghost w-full">
               <RotateCcw size={16} /> Reset to demo data
+            </button>
+            <button
+              onClick={async () => {
+                if (!dupCount) return;
+                if (
+                  !confirm(
+                    `Remove ${dupCount} duplicate trade${dupCount === 1 ? "" : "s"}? One copy of each is kept — notes, grades, and wheel tags are preserved.`
+                  )
+                )
+                  return;
+                try {
+                  const n = await removeDuplicates();
+                  flash(true, `Removed ${n} duplicate trade${n === 1 ? "" : "s"}.`);
+                } catch {
+                  flash(false, "Couldn't remove duplicates — nothing was changed.");
+                }
+              }}
+              disabled={dupCount === 0}
+              className="btn-ghost w-full"
+            >
+              <CopyMinus size={16} />
+              {dupCount ? `Remove ${dupCount} duplicate trade${dupCount === 1 ? "" : "s"}` : "No duplicate trades found"}
             </button>
             <button
               onClick={() => {
