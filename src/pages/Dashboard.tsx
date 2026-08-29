@@ -113,7 +113,7 @@ export default function Dashboard() {
       {!hasTrades ? (
         <EmptyState
           icon={LineChartIcon}
-          title="No trades yet — let's build your flywheel"
+          title="No trades yet. Let's build your flywheel"
           sub="Flywheel turns your sold puts and calls into momentum and yield analytics. Import your broker history or log your first trade to see your realized P&L, win rate, and yield come to life."
           action={{ label: "Import your trades", to: "/import", icon: Upload }}
           secondaryAction={{ label: "Browse the demo", to: "/trades" }}
@@ -122,7 +122,7 @@ export default function Dashboard() {
         <>
       {windowed && windowCount === 0 && (
         <div className="rounded-xl border border-white/10 bg-white/[0.02] px-4 py-3 text-sm text-slate-400">
-          No trades in the last {tf}. Flow metrics show zero for this window — your current holdings below are unaffected.
+          No trades in the last {tf}. Flow metrics show zero for this window; your current holdings below are unaffected.
         </div>
       )}
       {/* KPI grid — inverted pyramid: hero P&L top-left, then context metrics */}
@@ -179,7 +179,7 @@ export default function Dashboard() {
           value={windowCount ? pct(p.annualizedReturn, 1) : "—"}
           tone="gold"
           sub={`${pct(p.monthlyYield, 2)}/mo on capital · ${p.daysActive}d active`}
-          hint="Realized return on capital base, annualized — the real yield on deployed cash. Scoped to the selected timeframe."
+          hint="Realized return on capital base, annualized: the real yield on deployed cash. Scoped to the selected timeframe."
         />
       </div>
 
@@ -218,7 +218,7 @@ export default function Dashboard() {
           tone={pCur.mtm >= 0 ? "pos" : "neg"}
           delta={<Delta dir={deltaDir(pCur.unrealized)} value={`${signed(pCur.unrealized, 0)} open`} size="xs" />}
           sub={`Realized ${signed(pCur.realized, 0)} + unrealized on open shares`}
-          hint="Realized premium plus the live gain/loss on shares you still hold (sharesHeld × lastPrice − cost). A live snapshot of your whole book — it always reflects now, not the selected timeframe."
+          hint="Realized premium plus the live gain/loss on shares you still hold (sharesHeld × lastPrice − cost). A live snapshot of your whole book; it always reflects now, not the selected timeframe."
         />
         <Kpi
           label="Capital Deployed · current"
@@ -226,7 +226,7 @@ export default function Dashboard() {
           tone="gold"
           to="/radar"
           sub={`${usd0(pCur.capitalDeployed)} at work · ${pCur.openContracts} open contracts`}
-          hint="Capital tied up in held shares plus open cash-secured-put collateral, as a share of your capital base. A current snapshot — it always reflects now, not the selected timeframe."
+          hint="Capital tied up in held shares plus open cash-secured-put collateral, as a share of your capital base. A current snapshot; it always reflects now, not the selected timeframe."
         />
       </div>
 

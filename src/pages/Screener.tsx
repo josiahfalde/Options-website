@@ -86,7 +86,7 @@ export default function Screener() {
             <NumField label="Strike ($/share)" value={strike} onChange={setStrike} step={0.5} />
             <NumField label="Premium ($ per contract)" value={premium} onChange={setPremium} step={1} />
             <div>
-              <label className="stat-label">Days to expiry — {dte} DTE</label>
+              <label className="stat-label">Days to expiry: {dte} DTE</label>
               <input
                 type="range"
                 min={1}
@@ -117,7 +117,7 @@ export default function Screener() {
             right={
               <Pill tone={go ? "green" : "red"}>
                 {go ? <Check size={13} /> : <X size={13} />}
-                {go ? "GO — fits your rules" : `NO-GO · ${passCount}/${checks.length}`}
+                {go ? "GO: fits your rules" : `NO-GO · ${passCount}/${checks.length}`}
               </Pill>
             }
           />

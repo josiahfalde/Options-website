@@ -14,7 +14,7 @@ export function DemoBanner() {
     <div className="flex flex-wrap items-center gap-x-3 gap-y-2 border-b border-torque-500/20 bg-torque-500/[0.07] px-4 py-2.5 text-sm md:px-8">
       <Eye size={16} className="shrink-0 text-torque-400" />
       <span className="text-torque-200">
-        You're viewing the <span className="font-semibold">demo</span> — sample data, nothing you
+        You're viewing the <span className="font-semibold">demo</span>: sample data, nothing you
         change is saved.
       </span>
       <div className="ml-auto flex items-center gap-2">

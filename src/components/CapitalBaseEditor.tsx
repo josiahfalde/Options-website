@@ -102,7 +102,7 @@ export function CapitalBaseEditor({
         aria-expanded={open}
         title={
           estimated
-            ? "Capital base is estimated from your peak put collateral — click to set your real capital."
+            ? "Capital base is estimated from your peak put collateral; click to set your real capital."
             : "Click to edit your capital base."
         }
         className={cls(

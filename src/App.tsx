@@ -4,6 +4,7 @@ import Dashboard from "./pages/Dashboard";
 import Strategies from "./pages/Strategies";
 import Trades from "./pages/Trades";
 import Campaigns from "./pages/Campaigns";
+import Allocation from "./pages/Allocation";
 import Screener from "./pages/Screener";
 import RadarPage from "./pages/Radar";
 import CalendarPage from "./pages/Calendar";
@@ -22,6 +23,7 @@ export default function App() {
         <Route path="/strategies" element={<Strategies />} />
         <Route path="/trades" element={<Trades />} />
         <Route path="/campaigns" element={<Campaigns />} />
+        <Route path="/allocation" element={<Allocation />} />
         <Route path="/screener" element={<Screener />} />
         <Route path="/radar" element={<RadarPage />} />
         <Route path="/calendar" element={<CalendarPage />} />

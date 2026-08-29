@@ -47,10 +47,10 @@ export const STRATEGY_DEFS: StrategyDef[] = [
   { key: "wheel", label: "Wheel", short: "Wheel", tone: "green", blurb: "Cash-secured puts → assignment → covered calls." },
   { key: "csp", label: "Cash-Secured Put", short: "CSP", tone: "green", legs: 1, blurb: "Standalone short put (not part of a wheel)." },
   { key: "covered-call", label: "Covered Call", short: "CC", tone: "green", legs: 1, blurb: "Short call against held shares." },
-  { key: "put-credit-spread", label: "Put Credit Spread", short: "PCS", tone: "green", legs: 2, blurb: "Bull put vertical — sell a put, buy a lower put." },
-  { key: "call-credit-spread", label: "Call Credit Spread", short: "CCS", tone: "blue", legs: 2, blurb: "Bear call vertical — sell a call, buy a higher call." },
-  { key: "put-debit-spread", label: "Put Debit Spread", short: "PDS", tone: "blue", legs: 2, blurb: "Bear put vertical — buy a put, sell a lower put." },
-  { key: "call-debit-spread", label: "Call Debit Spread", short: "CDS", tone: "blue", legs: 2, blurb: "Bull call vertical — buy a call, sell a higher call." },
+  { key: "put-credit-spread", label: "Put Credit Spread", short: "PCS", tone: "green", legs: 2, blurb: "Bull put vertical: sell a put, buy a lower put." },
+  { key: "call-credit-spread", label: "Call Credit Spread", short: "CCS", tone: "blue", legs: 2, blurb: "Bear call vertical: sell a call, buy a higher call." },
+  { key: "put-debit-spread", label: "Put Debit Spread", short: "PDS", tone: "blue", legs: 2, blurb: "Bear put vertical: buy a put, sell a lower put." },
+  { key: "call-debit-spread", label: "Call Debit Spread", short: "CDS", tone: "blue", legs: 2, blurb: "Bull call vertical: buy a call, sell a higher call." },
   { key: "iron-condor", label: "Iron Condor", short: "IC", tone: "gold", legs: 4, blurb: "Put credit spread + call credit spread, defined risk." },
   { key: "long-call", label: "Long Call", short: "LC", tone: "blue", legs: 1, blurb: "Bought call." },
   { key: "long-put", label: "Long Put", short: "LP", tone: "red", legs: 1, blurb: "Bought put." },
@@ -126,7 +126,7 @@ function classifyLeg(t: Trade): StrategyKey {
     if (t.action === "CSP") return "csp";
     if (t.action === "CC") return "covered-call";
     if (t.action === "AAssignSTK") return "stock";
-    return "wheel"; // a lone BB — treat as wheel activity
+    return "wheel"; // a lone BB, treat as wheel activity
   }
   if (t.action === "BTO") return t.optionType === "put" ? "long-put" : "long-call";
   if (t.action === "STO") return t.optionType === "put" ? "csp" : "covered-call";

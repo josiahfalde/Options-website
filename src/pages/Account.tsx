@@ -96,7 +96,7 @@ export default function Account() {
           Export my data (JSON)
         </button>
         <p className="mt-2 text-xs text-slate-500">
-          Downloads everything {BRAND.name} holds for you — trades, prices, and settings — as a
+          Downloads everything {BRAND.name} holds for you (trades, prices, and settings) as a
           single JSON file.
         </p>
       </Card>
@@ -130,7 +130,7 @@ export default function Account() {
         </button>
         <p className="mt-3 text-xs text-slate-500">
           Note: this clears your data but keeps your login. Fully deleting the account itself
-          requires a server-side step that ships with hosting (JF-11) — until then, email support
+          requires a server-side step that ships with hosting (JF-11); until then, email support
           to have the login removed.
         </p>
       </Card>

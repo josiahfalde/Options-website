@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import type { Dataset, Trade } from "../types";
+import type { Dataset, StockEvent, Trade } from "../types";
 
 // ============================================================================
 // Remote (Supabase) data access. Maps snake_case DB rows <-> camelCase app
@@ -77,19 +77,98 @@ function tradeToRow(t: Partial<Trade>): Record<string, unknown> {
   return row;
 }
 
+// ---- stock events (allocation layer) ---------------------------------------
+interface StockEventRow {
+  id: string;
+  ticker: string;
+  trade_date: string;
+  kind: StockEvent["kind"];
+  shares: number;
+  price: number;
+  amount: number;
+}
+
+function rowToStockEvent(r: StockEventRow): StockEvent {
+  return {
+    id: r.id,
+    ticker: r.ticker,
+    date: r.trade_date,
+    kind: r.kind,
+    shares: Number(r.shares) || 0,
+    price: Number(r.price) || 0,
+    amount: Number(r.amount) || 0,
+  };
+}
+
+function stockEventToRow(e: Omit<StockEvent, "id">, userId: string): Record<string, unknown> {
+  return {
+    user_id: userId,
+    ticker: e.ticker.toUpperCase(),
+    trade_date: e.date,
+    kind: e.kind,
+    shares: e.shares,
+    price: e.price,
+    amount: e.amount,
+  };
+}
+
+export async function insertStockEvents(
+  sb: SupabaseClient,
+  userId: string,
+  events: Array<Omit<StockEvent, "id">>
+): Promise<StockEvent[]> {
+  if (events.length === 0) return [];
+  const { data, error } = await sb
+    .from("stock_events")
+    .insert(events.map((e) => stockEventToRow(e, userId)))
+    .select("*");
+  if (error) throw error;
+  return (data as StockEventRow[]).map(rowToStockEvent);
+}
+
+export async function deleteStockEventRemote(sb: SupabaseClient, id: string): Promise<void> {
+  const { error } = await sb.from("stock_events").delete().eq("id", id);
+  if (error) throw error;
+}
+
+/** Set (or, with null, clear) a user's sector override for a ticker. */
+export async function upsertSector(
+  sb: SupabaseClient,
+  userId: string,
+  ticker: string,
+  sector: string | null
+): Promise<void> {
+  const t = ticker.toUpperCase();
+  if (!sector) {
+    const { error } = await sb.from("ticker_sectors").delete().eq("user_id", userId).eq("ticker", t);
+    if (error) throw error;
+    return;
+  }
+  const { error } = await sb
+    .from("ticker_sectors")
+    .upsert({ user_id: userId, ticker: t, sector }, { onConflict: "user_id,ticker" });
+  if (error) throw error;
+}
+
 /** Load the full dataset for the current user from Supabase. */
 export async function fetchDataset(sb: SupabaseClient, userId: string): Promise<Dataset> {
-  const [tradesRes, pricesRes, settingsRes] = await Promise.all([
+  const [tradesRes, pricesRes, settingsRes, stockRes, sectorRes] = await Promise.all([
     sb.from("trades").select("*").eq("user_id", userId).order("trade_date", { ascending: true }),
     sb.from("prices").select("ticker, price").eq("user_id", userId),
     sb.from("user_settings").select("*").eq("user_id", userId).maybeSingle(),
+    sb.from("stock_events").select("*").eq("user_id", userId).order("trade_date", { ascending: true }),
+    sb.from("ticker_sectors").select("ticker, sector").eq("user_id", userId),
   ]);
   if (tradesRes.error) throw tradesRes.error;
   if (pricesRes.error) throw pricesRes.error;
   if (settingsRes.error) throw settingsRes.error;
+  if (stockRes.error) throw stockRes.error;
+  if (sectorRes.error) throw sectorRes.error;
 
   const lastPrices: Record<string, number> = {};
   for (const p of pricesRes.data ?? []) lastPrices[p.ticker] = Number(p.price) || 0;
+  const sectors: Record<string, string> = {};
+  for (const r of sectorRes.data ?? []) sectors[r.ticker] = r.sector;
 
   const s = settingsRes.data;
   return {
@@ -102,6 +181,8 @@ export async function fetchDataset(sb: SupabaseClient, userId: string): Promise<
       year_ago_date: s?.spy_year_ago_date ?? "",
     },
     trades: (tradesRes.data ?? []).map(rowToTrade),
+    stockEvents: (stockRes.data as StockEventRow[] | null ?? []).map(rowToStockEvent),
+    sectors,
   };
 }
 

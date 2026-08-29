@@ -16,7 +16,7 @@ here; a new token or pattern needs a real justification.
   Charts: `Recharts`.
 - **Routing:** `react-router-dom` **`HashRouter`** (wrapper in `src/main.tsx`,
   routes in `src/App.tsx`). URLs look like `…/#/trades`. Routes: `/#/` (Dashboard),
-  `/#/trades`, `/#/campaigns`, `/#/screener`, `/#/radar`, `/#/insights`,
+  `/#/trades`, `/#/campaigns`, `/#/allocation`, `/#/screener`, `/#/radar`, `/#/insights`,
   `/#/import`, `/#/account`. Unknown paths fall back to Dashboard.
 - **Dev server:** `npm run dev` → http://localhost:5173/ (Vite default; no custom
   port set).
@@ -81,7 +81,7 @@ before writing raw utility soup.**
 - Helpers: `src/lib/format.ts` — number/formatting helpers and **`cls(...)`** for
   conditional classNames (use this, NOT `clsx`/`classnames` — not dependencies here).
   Also `finance.ts`, `theme.ts`, `supabase.ts`.
-- Screens: `src/pages/*` (Dashboard, Trades, Campaigns, Screener, Radar, Insights,
+- Screens: `src/pages/*` (Dashboard, Trades, Campaigns, Allocation, Screener, Radar, Insights,
   ImportData, Account).
 - Auth UI: `src/auth/` (`AuthProvider`, `AuthModal`, `AuthButton`, `AccountMenu`,
   `AuthUI`, `DemoBanner`).
@@ -89,7 +89,7 @@ before writing raw utility soup.**
 ## Guardrails
 
 - **Do NOT touch the analytics/data layer for a visual change:** `src/data/`
-  (`compute.ts`, `store.tsx`, `remote.ts`, `importXlsx.ts`). `compute.ts` was
+  (`compute.ts`, `allocation.ts`, `store.tsx`, `remote.ts`, `importXlsx.ts`, `importStock.ts`). `compute.ts` was
   validated to the penny against a real workbook. Surface backend/data/auth needs
   rather than reaching into them.
 - **Verify visually.** Playwright MCP browser tools are available — load the actual

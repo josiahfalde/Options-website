@@ -64,8 +64,8 @@ export default {
       },
       keyframes: {
         "fade-up": {
-          "0%": { opacity: "0", transform: "translateY(8px)" },
-          "100%": { opacity: "1", transform: "translateY(0)" },
+          "0%": { transform: "translateY(8px)" },
+          "100%": { transform: "translateY(0)" },
         },
         spinslow: {
           to: { transform: "rotate(360deg)" },

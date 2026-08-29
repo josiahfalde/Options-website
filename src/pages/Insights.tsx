@@ -74,7 +74,7 @@ export default function Insights() {
         <h1 className="text-2xl font-extrabold tracking-tight text-slate-50">Insights</h1>
         <p className="mt-1 flex items-center gap-2 text-sm text-slate-400">
           <Brain size={15} className="text-flux-400" />
-          What's actually working — beyond the running P&amp;L.
+          What's actually working, beyond the running P&amp;L.
         </p>
       </div>
 
@@ -264,13 +264,13 @@ export default function Insights() {
           title="Best Closes"
           icon={<Trophy size={16} className="text-torque-400" />}
           rows={best}
-          onSeeAll={() => openDrill("Closes — best first", [...closed].sort((a, b) => b.pnl - a.pnl))}
+          onSeeAll={() => openDrill("Closes: best first", [...closed].sort((a, b) => b.pnl - a.pnl))}
         />
         <LeaderCard
           title="Worst Closes"
           icon={<TrendingDown size={16} className="text-loss-400" />}
           rows={worst}
-          onSeeAll={() => openDrill("Closes — worst first", [...closed].sort((a, b) => a.pnl - b.pnl))}
+          onSeeAll={() => openDrill("Closes: worst first", [...closed].sort((a, b) => a.pnl - b.pnl))}
         />
       </div>
         </>

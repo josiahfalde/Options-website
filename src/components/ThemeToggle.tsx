@@ -1,4 +1,3 @@
-import { Moon, Sun } from "lucide-react";
 import { useTheme } from "../lib/theme";
 import { cls } from "../lib/format";
 
@@ -16,9 +15,9 @@ export function ThemeToggle({ compact = false }: { compact?: boolean }) {
         onClick={toggleTheme}
         aria-label={label}
         title={label}
-        className="grid h-9 w-9 place-items-center rounded-lg text-slate-400 transition-colors hover:bg-white/5 hover:text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-flux-500/60"
+        className="grid h-9 place-items-center rounded-lg px-2 text-xs font-medium text-slate-400 transition-colors hover:bg-white/5 hover:text-slate-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-flux-500/60"
       >
-        {isDark ? <Moon size={17} /> : <Sun size={17} />}
+        {isDark ? "Light" : "Dark"}
       </button>
     );
   }
@@ -35,7 +34,6 @@ export function ThemeToggle({ compact = false }: { compact?: boolean }) {
         "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-flux-500/60"
       )}
     >
-      {isDark ? <Moon size={15} /> : <Sun size={15} />}
       <span>{isDark ? "Dark" : "Light"} mode</span>
       <span className="ml-auto text-[10px] uppercase tracking-wider text-slate-500">
         {isDark ? "Light" : "Dark"} →

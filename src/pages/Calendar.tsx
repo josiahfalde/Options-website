@@ -110,7 +110,7 @@ export default function CalendarPage() {
             Premium Calendar
           </h1>
           <p className="mt-1 text-sm text-slate-400">
-            Every day your wheel turned — colored by the premium it threw off.
+            Every day your wheel turned, colored by the premium it threw off.
           </p>
         </div>
 
@@ -268,7 +268,7 @@ export default function CalendarPage() {
           sub={
             hasAnyTrades
               ? "Nothing recorded this month. Jump to your most recent trading month, or step through with the arrows above."
-              : "Once you log trades, each day they happened will light up here — colored by the premium it threw off."
+              : "Once you log trades, each day they happened will light up here, colored by the premium it threw off."
           }
           action={
             hasAnyTrades
