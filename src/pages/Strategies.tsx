@@ -77,7 +77,7 @@ export default function Strategies() {
         <EmptyState
           icon={Layers}
           title="No strategies to break down yet"
-          sub="Flywheel sorts every trade into a strategy bucket — wheels, credit spreads, iron condors, or a custom bucket you name — and shows you which one is actually working. Import your trades to see the breakdown."
+          sub="Flywheel sorts every trade into a strategy bucket (wheels, credit spreads, iron condors, or a custom bucket you name) and shows you which one is actually working. Import your trades to see the breakdown."
           action={{ label: "Import your trades", to: "/import", icon: Upload }}
           secondaryAction={{ label: "View all trades", to: "/trades" }}
         />
@@ -93,7 +93,7 @@ export default function Strategies() {
       <section>
         <SectionTitle
           title="Combined"
-          sub="Every strategy together — this is your whole-portfolio realized P&L."
+          sub="Every strategy together: this is your whole-portfolio realized P&L."
         />
         <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
           <Kpi
@@ -132,7 +132,7 @@ export default function Strategies() {
       <section>
         <SectionTitle
           title="By strategy"
-          sub="Ranked by realized P&L — best performer first. The bar shows each bucket's share of the total."
+          sub="Ranked by realized P&L, best performer first. The bar shows each bucket's share of the total."
         />
 
         {/* Desktop: comparison table with inline bars */}
@@ -168,7 +168,7 @@ export default function Strategies() {
       <section>
         <SectionTitle
           title="Positions"
-          sub="Each entry is one position — multi-leg spreads grouped into a single unit. Expand to see the legs."
+          sub="Each entry is one position: multi-leg spreads grouped into a single unit. Expand to see the legs."
           right={
             <label className="relative inline-flex">
               <span className="sr-only">Filter positions by strategy</span>
@@ -221,7 +221,7 @@ function Header({ strategyCount }: { strategyCount: number }) {
         )}
       </div>
       <p className="mt-1 text-sm text-slate-400">
-        See your P&L for each strategy and all of them combined — so you know both the total and{" "}
+        See your P&L for each strategy and all of them combined, so you know both the total and{" "}
         <strong className="font-semibold text-slate-300">which strategy is actually working</strong>.
         Tag any trade's strategy from its detail drawer on the{" "}
         <a href="#/trades" className="text-flux-400 hover:underline">

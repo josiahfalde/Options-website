@@ -113,7 +113,7 @@ export default function Trades() {
         <EmptyState
           icon={Receipt}
           title="No trades logged yet"
-          sub="Every sold put, covered call, buyback, and assignment shows up here — sortable, searchable, and ready to journal. Import your broker history to populate it."
+          sub="Every sold put, covered call, buyback, and assignment shows up here: sortable, searchable, and ready to journal. Import your broker history to populate it."
           action={{ label: "Import your trades", to: "/import", icon: Upload }}
           secondaryAction={{ label: "See the dashboard", to: "/" }}
         />
@@ -583,7 +583,7 @@ function StrategySection({
 
         {isMultiLeg && (
           <p className="mt-2 text-[11px] leading-relaxed text-slate-500">
-            Part of a {position!.legs.length}-leg position — changing the strategy applies to all
+            Part of a {position!.legs.length}-leg position; changing the strategy applies to all
             legs so the spread stays consistent.
           </p>
         )}

@@ -83,9 +83,9 @@ export default function ImportData() {
         if (res.skipped) parts.push(`skipped ${res.skipped} duplicate${res.skipped === 1 ? "" : "s"}`);
         flash(
           true,
-          `${broker} CSV: ${parts.join(", ") || "nothing new — all trades were already imported"}.` +
+          `${broker} CSV: ${parts.join(", ") || "nothing new; all trades were already imported"}.` +
             (setBase
-              ? ` Set capital base to ${usd0(suggestedCapitalBase)} (${baseHint}) — adjust below if needed.`
+              ? ` Set capital base to ${usd0(suggestedCapitalBase)} (${baseHint}), adjust below if needed.`
               : "")
         );
       } else if (/\.json$/i.test(file.name)) {
@@ -117,7 +117,7 @@ export default function ImportData() {
       <div>
         <h1 className="text-2xl font-extrabold tracking-tight text-slate-50">Import &amp; Data</h1>
         <p className="mt-1 text-sm text-slate-400">
-          Make Flywheel yours. Bring in your real trades three ways — everything stays in your
+          Make Flywheel yours. Bring in your real trades three ways; everything stays in your
           browser until you sign in to sync.
         </p>
       </div>
@@ -184,7 +184,7 @@ export default function ImportData() {
           </div>
           <div className="mt-1 text-sm text-slate-400">
             {importing
-              ? "Saving your trades — hang tight, re-importing the same file never duplicates."
+              ? "Saving your trades. Hang tight; re-importing the same file never duplicates."
               : "We'll detect the format automatically and show you what came in."}
           </div>
           <span className="btn-primary pointer-events-none mt-4">
@@ -199,19 +199,19 @@ export default function ImportData() {
             icon={<FileSpreadsheet size={15} className="text-flux-400" />}
             tag={<Pill tone="green">.xlsx</Pill>}
             title="Wheel workbook"
-            desc="Your Options Trading.xlsx — replaces the demo with your full history."
+            desc="Your Options Trading.xlsx: replaces the demo with your full history."
           />
           <FormatCard
             icon={<FileSpreadsheet size={15} className="text-sky-300" />}
             tag={<Pill tone="blue">.csv</Pill>}
             title="Broker export"
-            desc="A tastytrade or Fidelity CSV — spreads grouped into positions, added to what's loaded."
+            desc="A tastytrade or Fidelity CSV: spreads grouped into positions, added to what's loaded."
           />
           <FormatCard
             icon={<FileJson size={15} className="text-slate-300" />}
             tag={<Pill tone="slate">.json</Pill>}
             title="Flywheel backup"
-            desc="A JSON file you exported below — restores trades, prices, and settings."
+            desc="A JSON file you exported below: restores trades, prices, and settings."
           />
         </div>
         <p className="mt-3 text-center text-[11px] text-slate-500">
@@ -242,7 +242,7 @@ export default function ImportData() {
               <div className="stat-label mb-1.5">Last share prices</div>
               {Object.keys(dataset.lastPrices).length === 0 ? (
                 <p className="rounded-xl bg-white/[0.03] p-3 text-xs text-slate-500">
-                  No tickers yet — import trades or add one below and its last price shows up here.
+                  No tickers yet. Import trades or add one below and its last price shows up here.
                 </p>
               ) : (
                 <div className="space-y-2">
@@ -283,7 +283,7 @@ export default function ImportData() {
                 if (!dupCount) return;
                 if (
                   !confirm(
-                    `Remove ${dupCount} duplicate trade${dupCount === 1 ? "" : "s"}? One copy of each is kept — notes, grades, and wheel tags are preserved.`
+                    `Remove ${dupCount} duplicate trade${dupCount === 1 ? "" : "s"}? One copy of each is kept; notes, grades, and wheel tags are preserved.`
                   )
                 )
                   return;
@@ -291,7 +291,7 @@ export default function ImportData() {
                   const n = await removeDuplicates();
                   flash(true, `Removed ${n} duplicate trade${n === 1 ? "" : "s"}.`);
                 } catch {
-                  flash(false, "Couldn't remove duplicates — nothing was changed.");
+                  flash(false, "Couldn't remove duplicates; nothing was changed.");
                 }
               }}
               disabled={dupCount === 0}
@@ -389,7 +389,7 @@ function ManualEntry({
     <Card>
       <SectionTitle
         title="Quick Add Trade"
-        sub="No file? Log one by hand — like your optionstrade skill, in the browser"
+        sub="No file? Log one by hand, like your optionstrade skill, in the browser"
         right={<PencilLine size={16} className="text-slate-500" />}
       />
       <div className="grid grid-cols-2 gap-3 md:grid-cols-7">

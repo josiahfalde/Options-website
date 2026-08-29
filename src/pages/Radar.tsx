@@ -31,7 +31,7 @@ export default function RadarPage() {
           title={hasTrades ? "Nothing on the radar right now" : "No positions to track yet"}
           sub={
             hasTrades
-              ? "Every contract is resolved and you're holding no assigned shares — you're all cash. New open puts and calls will appear here, sorted by soonest expiry."
+              ? "Every contract is resolved and you're holding no assigned shares; you're all cash. New open puts and calls will appear here, sorted by soonest expiry."
               : "Open puts and calls show up here ranked by time risk, and any assigned shares are tracked against their cost basis. Import your trades to start watching the clock."
           }
           action={
@@ -112,7 +112,7 @@ export default function RadarPage() {
             compact
             icon={PackageOpen}
             title="No shares held"
-            sub="You're all cash and selling puts — nothing has been assigned. Any shares you get put are tracked here against their premium-adjusted basis."
+            sub="You're all cash and selling puts; nothing has been assigned. Any shares you get put are tracked here against their premium-adjusted basis."
           />
         ) : (
           <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -151,7 +151,7 @@ export default function RadarPage() {
                     Premium has lowered your basis{" "}
                     <span className="num font-semibold text-flux-300">{pct(h.cushionPct, 1)}</span>{" "}
                     below the assignment price. You need{" "}
-                    <span className="num">{usd(h.costBasis)}</span> to break even — sell calls
+                    <span className="num">{usd(h.costBasis)}</span> to break even; sell calls
                     near/above that strike.
                   </div>
                 </Card>

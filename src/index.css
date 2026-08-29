@@ -53,13 +53,13 @@
   /* Surfaces: page is a soft slate wash, cards/inputs lift toward pure white.
      Ordered so "deeper" ink steps map to subtly darker neutrals, preserving
      the depth relationships the dark UI relies on. */
-  --c-ink-950: 241 245 249; /* page canvas */
+  --c-ink-950: 243 245 242; /* page canvas: faint green-tinted off-white, not the UI-kit gray */
   --c-ink-900: 248 250 252; /* inputs / inset panels */
   --c-ink-850: 255 255 255; /* cards / popovers */
   --c-ink-800: 255 255 255; /* tooltip / raised */
   --c-ink-750: 248 250 252;
-  --c-ink-700: 241 245 249;
-  --c-ink-600: 226 232 240;
+  --c-ink-700: 236 239 235;
+  --c-ink-600: 220 226 219;
 
   /* Text: invert the ramp so slate-400 (muted) stays muted and slate-100
      (near-white headings) becomes near-black headings. */
@@ -91,10 +91,6 @@ body,
 
 body {
   @apply bg-ink-950 text-slate-200 font-sans antialiased;
-  background-image:
-    radial-gradient(900px 500px at 12% -8%, var(--bg-glow-1), transparent 60%),
-    radial-gradient(700px 480px at 100% 0%, var(--bg-glow-2), transparent 55%);
-  background-attachment: fixed;
 }
 
 /* Thin, theme-aware scrollbars */

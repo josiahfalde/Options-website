@@ -31,7 +31,7 @@ function cleanUrl() {
 function friendly(message: string): string {
   if (/verifier|code challenge|non-empty/i.test(message)) {
     return (
-      "Couldn't finish Google sign-in — this browser blocked the temporary " +
+      "Couldn't finish Google sign-in: this browser blocked the temporary " +
       "login data the sign-in needs. If you're in a Private tab or have Brave " +
       "Shields up, switch to a normal tab or allow site data for this site, " +
       `then try again. (${message})`

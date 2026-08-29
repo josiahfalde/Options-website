@@ -105,7 +105,7 @@ export default function Campaigns() {
         <EmptyState
           icon={CircleDashed}
           title="No wheels turning yet"
-          sub="Once you log a sold put, Flywheel auto-detects the wheel cycle it kicks off — sell puts, get assigned, sell calls, get called away — and shows it here for you to confirm."
+          sub="Once you log a sold put, Flywheel auto-detects the wheel cycle it kicks off (sell puts, get assigned, sell calls, get called away) and shows it here for you to confirm."
           action={{ label: "Import your trades", to: "/import", icon: Upload }}
           secondaryAction={{ label: "View all trades", to: "/trades" }}
         />
@@ -164,7 +164,7 @@ function Header({ suggestedCount }: { suggestedCount: number }) {
         )}
       </div>
       <p className="mt-1 text-sm text-slate-400">
-        Each <strong className="font-semibold text-slate-300">wheel</strong> is one cycle — sell
+        Each <strong className="font-semibold text-slate-300">wheel</strong> is one cycle: sell
         puts, maybe get assigned, sell calls, get called away. Flywheel detects them automatically;
         confirm the ones that look right, and adjust any trade that landed in the wrong cycle.
       </p>
@@ -225,7 +225,7 @@ function WheelCard({
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-flux-500/20 bg-flux-500/[0.07] px-3 py-2">
           <span className="flex items-center gap-1.5 text-xs font-medium text-flux-300">
             <Sparkles size={13} className="shrink-0" />
-            Auto-detected cycle — confirm if this is one wheel?
+            Auto-detected cycle. Confirm this is one wheel?
           </span>
           <button
             onClick={onConfirm}

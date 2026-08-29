@@ -227,9 +227,7 @@ export function Layout({ children }: { children: ReactNode }) {
 function Brand({ compact }: { compact?: boolean }) {
   return (
     <div className="flex items-center gap-2.5">
-      <div className="relative grid h-9 w-9 place-items-center rounded-xl bg-flux-500/10 ring-1 ring-flux-500/30">
-        <Cog className="animate-spinslow text-flux-400" size={22} />
-      </div>
+      <Cog className="animate-spinslow shrink-0 text-flux-400" size={24} strokeWidth={1.75} />
       <div className="leading-tight">
         <div className="text-[15px] font-extrabold tracking-tight text-slate-100">
           {BRAND.name}
