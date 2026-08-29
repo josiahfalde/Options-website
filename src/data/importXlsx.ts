@@ -521,7 +521,7 @@ function parseOptionFromDesc(desc: string): Omit<OptEvent, "kind" | "date" | "am
   };
 }
 
-function splitCsv(line: string): string[] {
+export function splitCsv(line: string): string[] {
   const out: string[] = [];
   let cur = "";
   let q = false;
@@ -536,7 +536,7 @@ function splitCsv(line: string): string[] {
   return out.map((s) => s.trim());
 }
 
-function normalizeDate(s: string): string | null {
+export function normalizeDate(s: string): string | null {
   s = s.trim();
   if (/^\d{4}-\d{2}-\d{2}/.test(s)) return s.slice(0, 10);
   const m = s.match(/^(\d{1,2})[\/-](\d{1,2})[\/-](\d{2,4})/);

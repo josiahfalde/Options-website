@@ -84,10 +84,36 @@ export interface SpyBenchmark {
   year_ago_date: string;
 }
 
+// ---- Stock (share) events — the allocation layer -------------------------
+// Outright share buys / sells / dividend reinvestments, imported from a broker
+// history CSV or entered by hand. Kept SEPARATE from Trade so the validated
+// premium accounting in compute.ts never sees them. Shares acquired via put
+// assignment (and called away via CC assignment) are NOT stored here: they
+// already live on the option trades and are combined at read time by
+// computeAllocation().
+export type StockEventKind = "buy" | "sell" | "reinvest";
+
+export interface StockEvent {
+  id: string;
+  ticker: string;
+  date: string; // YYYY-MM-DD
+  kind: StockEventKind;
+  /** Share count, always positive; `kind` carries the direction. */
+  shares: number;
+  /** Fill price per share (0 if the source didn't carry one). */
+  price: number;
+  /** Absolute dollar total of the fill (shares * price when price is known). */
+  amount: number;
+}
+
 export interface Dataset {
   exportedAt: string;
   capitalBase: number;
   lastPrices: Record<string, number>;
   spy: SpyBenchmark;
   trades: Trade[];
+  /** Share-level events (see StockEvent). Optional for older exports. */
+  stockEvents?: StockEvent[];
+  /** Per-ticker sector overrides; unknown tickers fall back to the built-in map. */
+  sectors?: Record<string, string>;
 }

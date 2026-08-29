@@ -8,20 +8,24 @@ import {
   useState,
   type ReactNode,
 } from "react";
-import type { Dataset, Trade } from "../types";
+import type { Dataset, StockEvent, Trade } from "../types";
 import seed from "./seed.json";
 import { supabase } from "../lib/supabase";
 import { useAuth } from "../auth/AuthProvider";
 import {
+  deleteStockEventRemote,
   deleteTradeRemote,
   deleteTradesRemote,
   fetchDataset,
+  insertStockEvents,
   insertTrade,
   insertTrades,
   updateTradeRemote,
   upsertPrice,
+  upsertSector,
   upsertSettings,
 } from "./remote";
+import { planStockMerge } from "./allocation";
 
 // ============================================================================
 // Data layer. Two modes, one API (pages never change):
@@ -58,12 +62,23 @@ function normalize(raw: any): Dataset {
     positionId: t.positionId ?? t.position_id ?? null,
     optionType: t.optionType ?? t.option_type ?? null,
   }));
+  const stockEvents: StockEvent[] = (raw.stockEvents ?? []).map((e: any) => ({
+    id: e.id ?? newId(),
+    ticker: String(e.ticker).toUpperCase(),
+    date: e.date,
+    kind: e.kind ?? "buy",
+    shares: Math.abs(Number(e.shares)) || 0,
+    price: Number(e.price) || 0,
+    amount: Math.abs(Number(e.amount)) || 0,
+  }));
   return {
     exportedAt: raw.exportedAt ?? new Date().toISOString().slice(0, 10),
     capitalBase: Number(raw.capitalBase) || 0,
     lastPrices: raw.lastPrices ?? {},
     spy: raw.spy ?? { now: 0, year_ago: 0, year_ago_date: "" },
     trades,
+    stockEvents,
+    sectors: raw.sectors ?? {},
   };
 }
 
@@ -73,6 +88,8 @@ const emptyDataset = (): Dataset => ({
   lastPrices: {},
   spy: { now: 0, year_ago: 0, year_ago_date: "" },
   trades: [],
+  stockEvents: [],
+  sectors: {},
 });
 
 export type StoreMode = "demo" | "cloud";
@@ -188,6 +205,11 @@ interface StoreCtx {
   replaceDataset: (ds: Dataset, opts?: { merge?: boolean }) => Promise<ImportSummary>;
   /** Delete redundant copies of the same trade (see findDuplicateTradeIds). */
   removeDuplicates: () => Promise<number>;
+  /** Merge share-level events (buys/sells/DRIP); exact duplicates are skipped. */
+  importStockEvents: (events: StockEvent[]) => Promise<{ inserted: number; skipped: number }>;
+  deleteStockEvent: (id: string) => void;
+  /** Override a ticker's sector (null = back to the built-in map). */
+  setSector: (ticker: string, sector: string | null) => void;
   setCapitalBase: (n: number) => void;
   setPrice: (ticker: string, price: number) => void;
   setSpy: (now: number, yearAgo: number, yearAgoDate: string) => void;
@@ -347,6 +369,19 @@ export function StoreProvider({ children }: { children: ReactNode }) {
               skipped: plan.skipped,
             };
           }
+          // share events + sector overrides (from a Flywheel JSON backup)
+          if (next.stockEvents?.length) {
+            const freshS = await fetchDataset(supabase, user.id);
+            const sp = planStockMerge(freshS.stockEvents ?? [], next.stockEvents);
+            await insertStockEvents(
+              supabase,
+              user.id,
+              sp.toInsert.map(({ id: _id, ...rest }) => rest)
+            );
+          }
+          for (const [ticker, sector] of Object.entries(next.sectors ?? {})) {
+            await upsertSector(supabase, user.id, ticker, sector);
+          }
           // settings + prices
           const base = datasetRef.current;
           await upsertSettings(supabase, user.id, {
@@ -416,6 +451,68 @@ export function StoreProvider({ children }: { children: ReactNode }) {
     return ids.length;
   }, [mode, user]);
 
+  // --- allocation layer: share events + sector overrides --------------------
+  const importStockEvents = useCallback(
+    async (events: StockEvent[]) => {
+      if (events.length === 0) return { inserted: 0, skipped: 0 };
+      setIsSeed(false);
+      setError(null);
+      if (mode === "cloud" && supabase && user) {
+        try {
+          // Dedupe against what the DATABASE holds (same rule as trades).
+          const fresh = await fetchDataset(supabase, user.id);
+          const plan = planStockMerge(fresh.stockEvents ?? [], events);
+          await insertStockEvents(
+            supabase,
+            user.id,
+            plan.toInsert.map(({ id: _id, ...rest }) => rest)
+          );
+          const ds2 = await fetchDataset(supabase, user.id);
+          setDataset(ds2);
+          return { inserted: plan.toInsert.length, skipped: plan.skipped };
+        } catch (e: any) {
+          setError(e?.message ?? "Import failed.");
+          throw e;
+        }
+      }
+      const plan = planStockMerge(datasetRef.current.stockEvents ?? [], events);
+      const fresh = plan.toInsert.map((e) => ({ ...e, id: newId() }));
+      setDataset((d) => ({ ...d, stockEvents: [...(d.stockEvents ?? []), ...fresh] }));
+      return { inserted: plan.toInsert.length, skipped: plan.skipped };
+    },
+    [mode, user]
+  );
+
+  const deleteStockEvent = useCallback(
+    (id: string) => {
+      setIsSeed(false);
+      const prev = datasetRef.current;
+      setDataset((d) => ({ ...d, stockEvents: (d.stockEvents ?? []).filter((e) => e.id !== id) }));
+      runRemote(() =>
+        deleteStockEventRemote(supabase!, id).catch((e) => {
+          setDataset(prev);
+          throw e;
+        })
+      );
+    },
+    [runRemote]
+  );
+
+  const setSector = useCallback(
+    (ticker: string, sector: string | null) => {
+      setIsSeed(false);
+      const t = ticker.toUpperCase();
+      setDataset((d) => {
+        const sectors = { ...(d.sectors ?? {}) };
+        if (sector) sectors[t] = sector;
+        else delete sectors[t];
+        return { ...d, sectors };
+      });
+      runRemote(() => upsertSector(supabase!, user!.id, t, sector));
+    },
+    [runRemote, user]
+  );
+
   const setCapitalBase = useCallback(
     (n: number) => {
       setIsSeed(false);
@@ -461,11 +558,13 @@ export function StoreProvider({ children }: { children: ReactNode }) {
 
   const clearAll = useCallback(() => {
     setIsSeed(false);
-    setDataset((d) => ({ ...d, trades: [] }));
+    setDataset((d) => ({ ...d, trades: [], stockEvents: [] }));
     if (mode === "cloud" && supabase && user) {
       runRemote(async () => {
         const { error: e } = await supabase!.from("trades").delete().eq("user_id", user.id);
         if (e) throw e;
+        const { error: e2 } = await supabase!.from("stock_events").delete().eq("user_id", user.id);
+        if (e2) throw e2;
       });
     }
   }, [mode, user, runRemote]);
@@ -482,6 +581,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       deleteTrade,
       replaceDataset,
       removeDuplicates,
+      importStockEvents,
+      deleteStockEvent,
+      setSector,
       setCapitalBase,
       setPrice,
       setSpy,
@@ -499,6 +601,9 @@ export function StoreProvider({ children }: { children: ReactNode }) {
       deleteTrade,
       replaceDataset,
       removeDuplicates,
+      importStockEvents,
+      deleteStockEvent,
+      setSector,
       setCapitalBase,
       setPrice,
       setSpy,

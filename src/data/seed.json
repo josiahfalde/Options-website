@@ -6,7 +6,8 @@
     "T": 22.1,
     "PLTR": 46.3,
     "BAC": 41.05,
-    "NIO": 4.85
+    "NIO": 4.85,
+    "SCHD": 27.9
   },
   "spy": {
     "now": 754.13,
@@ -386,25 +387,245 @@
       "amount": 25.0,
       "status": "Open"
     },
-
-    { "ticker": "PLTR", "side": "credit", "action": "STO", "date": "2026-04-15", "shares": 100, "amount": 95.0, "status": "Expired", "strike": 44, "expiry": "2026-05-15", "optionType": "put", "positionId": "pcs-pltr-1", "strategy": "put-credit-spread" },
-    { "ticker": "PLTR", "side": "debit", "action": "BTO", "date": "2026-04-15", "shares": 100, "amount": 40.0, "status": "Expired", "strike": 41, "expiry": "2026-05-15", "optionType": "put", "positionId": "pcs-pltr-1", "strategy": "put-credit-spread" },
-
-    { "ticker": "BAC", "side": "credit", "action": "STO", "date": "2026-04-20", "shares": 100, "amount": 60.0, "status": "Closed", "strike": 42, "expiry": "2026-05-20", "optionType": "call", "positionId": "ccs-bac-1", "strategy": "call-credit-spread" },
-    { "ticker": "BAC", "side": "debit", "action": "BTO", "date": "2026-04-20", "shares": 100, "amount": 25.0, "status": "Closed", "strike": 44, "expiry": "2026-05-20", "optionType": "call", "positionId": "ccs-bac-1", "strategy": "call-credit-spread" },
-    { "ticker": "BAC", "side": "debit", "action": "BTC", "date": "2026-05-08", "shares": 100, "amount": 80.0, "status": "Closed", "strike": 42, "expiry": "2026-05-20", "optionType": "call", "positionId": "ccs-bac-1", "strategy": "call-credit-spread" },
-    { "ticker": "BAC", "side": "credit", "action": "STC", "date": "2026-05-08", "shares": 100, "amount": 30.0, "status": "Closed", "strike": 44, "expiry": "2026-05-20", "optionType": "call", "positionId": "ccs-bac-1", "strategy": "call-credit-spread" },
-
-    { "ticker": "T", "side": "credit", "action": "STO", "date": "2026-05-22", "shares": 100, "amount": 45.0, "status": "Open", "strike": 21, "expiry": "2026-06-19", "optionType": "put", "positionId": "pcs-t-1", "strategy": "put-credit-spread" },
-    { "ticker": "T", "side": "debit", "action": "BTO", "date": "2026-05-22", "shares": 100, "amount": 18.0, "status": "Open", "strike": 19, "expiry": "2026-06-19", "optionType": "put", "positionId": "pcs-t-1", "strategy": "put-credit-spread" },
-
-    { "ticker": "PLTR", "side": "credit", "action": "STO", "date": "2026-05-20", "shares": 100, "amount": 45.0, "status": "Open", "strike": 50, "expiry": "2026-06-19", "optionType": "call", "positionId": "ic-pltr-1", "strategy": "iron-condor" },
-    { "ticker": "PLTR", "side": "debit", "action": "BTO", "date": "2026-05-20", "shares": 100, "amount": 20.0, "status": "Open", "strike": 53, "expiry": "2026-06-19", "optionType": "call", "positionId": "ic-pltr-1", "strategy": "iron-condor" },
-    { "ticker": "PLTR", "side": "credit", "action": "STO", "date": "2026-05-20", "shares": 100, "amount": 50.0, "status": "Open", "strike": 42, "expiry": "2026-06-19", "optionType": "put", "positionId": "ic-pltr-1", "strategy": "iron-condor" },
-    { "ticker": "PLTR", "side": "debit", "action": "BTO", "date": "2026-05-20", "shares": 100, "amount": 22.0, "status": "Open", "strike": 39, "expiry": "2026-06-19", "optionType": "put", "positionId": "ic-pltr-1", "strategy": "iron-condor" },
-
-    { "ticker": "PLTR", "side": "debit", "action": "BTO", "date": "2026-04-28", "shares": 100, "amount": 130.0, "status": "Closed", "strike": 48, "expiry": "2026-06-19", "optionType": "call", "positionId": "mom-pltr-1", "strategy": "Momentum Calls" },
-    { "ticker": "PLTR", "side": "credit", "action": "STC", "date": "2026-05-18", "shares": 100, "amount": 210.0, "status": "Closed", "strike": 48, "expiry": "2026-06-19", "optionType": "call", "positionId": "mom-pltr-1", "strategy": "Momentum Calls" }
+    {
+      "ticker": "PLTR",
+      "side": "credit",
+      "action": "STO",
+      "date": "2026-04-15",
+      "shares": 100,
+      "amount": 95.0,
+      "status": "Expired",
+      "strike": 44,
+      "expiry": "2026-05-15",
+      "optionType": "put",
+      "positionId": "pcs-pltr-1",
+      "strategy": "put-credit-spread"
+    },
+    {
+      "ticker": "PLTR",
+      "side": "debit",
+      "action": "BTO",
+      "date": "2026-04-15",
+      "shares": 100,
+      "amount": 40.0,
+      "status": "Expired",
+      "strike": 41,
+      "expiry": "2026-05-15",
+      "optionType": "put",
+      "positionId": "pcs-pltr-1",
+      "strategy": "put-credit-spread"
+    },
+    {
+      "ticker": "BAC",
+      "side": "credit",
+      "action": "STO",
+      "date": "2026-04-20",
+      "shares": 100,
+      "amount": 60.0,
+      "status": "Closed",
+      "strike": 42,
+      "expiry": "2026-05-20",
+      "optionType": "call",
+      "positionId": "ccs-bac-1",
+      "strategy": "call-credit-spread"
+    },
+    {
+      "ticker": "BAC",
+      "side": "debit",
+      "action": "BTO",
+      "date": "2026-04-20",
+      "shares": 100,
+      "amount": 25.0,
+      "status": "Closed",
+      "strike": 44,
+      "expiry": "2026-05-20",
+      "optionType": "call",
+      "positionId": "ccs-bac-1",
+      "strategy": "call-credit-spread"
+    },
+    {
+      "ticker": "BAC",
+      "side": "debit",
+      "action": "BTC",
+      "date": "2026-05-08",
+      "shares": 100,
+      "amount": 80.0,
+      "status": "Closed",
+      "strike": 42,
+      "expiry": "2026-05-20",
+      "optionType": "call",
+      "positionId": "ccs-bac-1",
+      "strategy": "call-credit-spread"
+    },
+    {
+      "ticker": "BAC",
+      "side": "credit",
+      "action": "STC",
+      "date": "2026-05-08",
+      "shares": 100,
+      "amount": 30.0,
+      "status": "Closed",
+      "strike": 44,
+      "expiry": "2026-05-20",
+      "optionType": "call",
+      "positionId": "ccs-bac-1",
+      "strategy": "call-credit-spread"
+    },
+    {
+      "ticker": "T",
+      "side": "credit",
+      "action": "STO",
+      "date": "2026-05-22",
+      "shares": 100,
+      "amount": 45.0,
+      "status": "Open",
+      "strike": 21,
+      "expiry": "2026-06-19",
+      "optionType": "put",
+      "positionId": "pcs-t-1",
+      "strategy": "put-credit-spread"
+    },
+    {
+      "ticker": "T",
+      "side": "debit",
+      "action": "BTO",
+      "date": "2026-05-22",
+      "shares": 100,
+      "amount": 18.0,
+      "status": "Open",
+      "strike": 19,
+      "expiry": "2026-06-19",
+      "optionType": "put",
+      "positionId": "pcs-t-1",
+      "strategy": "put-credit-spread"
+    },
+    {
+      "ticker": "PLTR",
+      "side": "credit",
+      "action": "STO",
+      "date": "2026-05-20",
+      "shares": 100,
+      "amount": 45.0,
+      "status": "Open",
+      "strike": 50,
+      "expiry": "2026-06-19",
+      "optionType": "call",
+      "positionId": "ic-pltr-1",
+      "strategy": "iron-condor"
+    },
+    {
+      "ticker": "PLTR",
+      "side": "debit",
+      "action": "BTO",
+      "date": "2026-05-20",
+      "shares": 100,
+      "amount": 20.0,
+      "status": "Open",
+      "strike": 53,
+      "expiry": "2026-06-19",
+      "optionType": "call",
+      "positionId": "ic-pltr-1",
+      "strategy": "iron-condor"
+    },
+    {
+      "ticker": "PLTR",
+      "side": "credit",
+      "action": "STO",
+      "date": "2026-05-20",
+      "shares": 100,
+      "amount": 50.0,
+      "status": "Open",
+      "strike": 42,
+      "expiry": "2026-06-19",
+      "optionType": "put",
+      "positionId": "ic-pltr-1",
+      "strategy": "iron-condor"
+    },
+    {
+      "ticker": "PLTR",
+      "side": "debit",
+      "action": "BTO",
+      "date": "2026-05-20",
+      "shares": 100,
+      "amount": 22.0,
+      "status": "Open",
+      "strike": 39,
+      "expiry": "2026-06-19",
+      "optionType": "put",
+      "positionId": "ic-pltr-1",
+      "strategy": "iron-condor"
+    },
+    {
+      "ticker": "PLTR",
+      "side": "debit",
+      "action": "BTO",
+      "date": "2026-04-28",
+      "shares": 100,
+      "amount": 130.0,
+      "status": "Closed",
+      "strike": 48,
+      "expiry": "2026-06-19",
+      "optionType": "call",
+      "positionId": "mom-pltr-1",
+      "strategy": "Momentum Calls"
+    },
+    {
+      "ticker": "PLTR",
+      "side": "credit",
+      "action": "STC",
+      "date": "2026-05-18",
+      "shares": 100,
+      "amount": 210.0,
+      "status": "Closed",
+      "strike": 48,
+      "expiry": "2026-06-19",
+      "optionType": "call",
+      "positionId": "mom-pltr-1",
+      "strategy": "Momentum Calls"
+    }
   ],
-  "_note": "Anonymized demo data. Import your own workbook on the Data page."
+  "_note": "Anonymized demo data. Import your own workbook on the Data page.",
+  "stockEvents": [
+    {
+      "ticker": "PLTR",
+      "date": "2026-02-03",
+      "kind": "buy",
+      "shares": 40,
+      "price": 38.2,
+      "amount": 1528.0
+    },
+    {
+      "ticker": "BAC",
+      "date": "2026-03-11",
+      "kind": "buy",
+      "shares": 25,
+      "price": 39.4,
+      "amount": 985.0
+    },
+    {
+      "ticker": "BAC",
+      "date": "2026-04-01",
+      "kind": "reinvest",
+      "shares": 0.412,
+      "price": 40.05,
+      "amount": 16.5
+    },
+    {
+      "ticker": "PLTR",
+      "date": "2026-04-22",
+      "kind": "sell",
+      "shares": 15,
+      "price": 44.1,
+      "amount": 661.5
+    },
+    {
+      "ticker": "SCHD",
+      "date": "2026-05-06",
+      "kind": "buy",
+      "shares": 30,
+      "price": 27.1,
+      "amount": 813.0
+    }
+  ],
+  "sectors": {}
 }

@@ -16,6 +16,7 @@ import {
 import { findDuplicateTradeIds, useStore } from "../data/store";
 import { subscribePendingImport } from "../lib/pendingImport";
 import { parseWorkbook, parseFidelityCsv, parseTastytradeCsv, isTastytradeCsv } from "../data/importXlsx";
+import { parseFidelityStockCsv } from "../data/importStock";
 import { Card, Pill, SectionTitle } from "../components/ui";
 import { todayISO, cls, usd0 } from "../lib/format";
 import type { Trade, TradeAction } from "../types";
@@ -25,6 +26,7 @@ export default function ImportData() {
     dataset,
     replaceDataset,
     removeDuplicates,
+    importStockEvents,
     addTrade,
     setCapitalBase,
     setPrice,
@@ -63,27 +65,38 @@ export default function ImportData() {
         const { trades, suggestedCapitalBase } = tasty
           ? parseTastytradeCsv(text, file.name)
           : parseFidelityCsv(text);
-        if (!trades.length) return flash(false, "Couldn't parse option trades from that CSV.");
+        // Fidelity history also carries outright share buys/sells; those feed
+        // the Allocation page and are stored separately from option trades.
+        const stock = tasty ? { events: [], skippedAssignments: 0 } : parseFidelityStockCsv(text);
+        if (!trades.length && !stock.events.length)
+          return flash(false, "Couldn't parse any option or share trades from that CSV.");
         // The CSV has no cash balance; if no capital base is set yet, seed it
         // with the estimated peak collateral so yields aren't divided by ~$0.
         const setBase = !dataset.capitalBase && suggestedCapitalBase > 0;
-        const res = await replaceDataset(
-          {
-            ...dataset,
-            trades,
-            capitalBase: dataset.capitalBase || suggestedCapitalBase,
-          },
-          { merge: true }
-        );
+        const res = trades.length
+          ? await replaceDataset(
+              {
+                ...dataset,
+                trades,
+                capitalBase: dataset.capitalBase || suggestedCapitalBase,
+              },
+              { merge: true }
+            )
+          : { inserted: 0, updated: 0, skipped: 0 };
+        const sres = stock.events.length
+          ? await importStockEvents(stock.events)
+          : { inserted: 0, skipped: 0 };
         const broker = tasty ? "tastytrade" : "Fidelity";
         const baseHint = tasty ? "≈ total defined-risk" : "≈ peak put collateral";
         const parts = [];
         if (res.inserted) parts.push(`added ${res.inserted} new trade${res.inserted === 1 ? "" : "s"}`);
         if (res.updated) parts.push(`updated ${res.updated} status${res.updated === 1 ? "" : "es"}`);
         if (res.skipped) parts.push(`skipped ${res.skipped} duplicate${res.skipped === 1 ? "" : "s"}`);
+        if (sres.inserted) parts.push(`added ${sres.inserted} share fill${sres.inserted === 1 ? "" : "s"} to Allocation`);
+        if (sres.skipped) parts.push(`${sres.skipped} share fill${sres.skipped === 1 ? "" : "s"} already imported`);
         flash(
           true,
-          `${broker} CSV: ${parts.join(", ") || "nothing new; all trades were already imported"}.` +
+          `${broker} CSV: ${parts.join(", ") || "nothing new; everything was already imported"}.` +
             (setBase
               ? ` Set capital base to ${usd0(suggestedCapitalBase)} (${baseHint}), adjust below if needed.`
               : "")
@@ -205,7 +218,7 @@ export default function ImportData() {
             icon={<FileSpreadsheet size={15} className="text-sky-300" />}
             tag={<Pill tone="blue">.csv</Pill>}
             title="Broker export"
-            desc="A tastytrade or Fidelity CSV: spreads grouped into positions, added to what's loaded."
+            desc="A tastytrade or Fidelity CSV: spreads grouped into positions, added to what's loaded. Fidelity history also brings in share buys and sells for the Allocation page."
           />
           <FormatCard
             icon={<FileJson size={15} className="text-slate-300" />}

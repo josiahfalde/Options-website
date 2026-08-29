@@ -170,6 +170,27 @@ settings row on signup. Apply with `supabase db push`.
   end-to-end on a real export (two QQQ 0DTE put credit spreads → −$116 / −$190, BE $728.55,
   max-loss $755 — exact). (PR #15) **Robinhood importer is next** (needs a sample RH CSV).
 
+### ✅ Done (JF-36, 2026-08-29): Allocation tracker (by ticker + by sector)
+
+- New `/#/allocation` page (nav: Positions → Allocation). Shows where capital sits
+  right now: share value + cash reserved behind open cash-secured puts, per ticker
+  and per sector, with weight of allocated total and % of capital base.
+- **Share-level data is a NEW, separate layer** so the validated option accounting
+  is untouched: `Dataset.stockEvents` (buy/sell/reinvest fills) +
+  `Dataset.sectors` (per-ticker overrides). Parser `src/data/importStock.ts` reads
+  the SHARE rows of the same Fidelity Accounts History CSV the option parser
+  reads (YOU BOUGHT / YOU SOLD / REINVESTMENT); rows tagged ASSIGNED are skipped
+  because assignments already live on the option trades (AAssignSTK / CC
+  Assigned) and `computeAllocation()` in `src/data/allocation.ts` combines both
+  (FIFO lots, avg cost, last price else at-cost). Re-import merges: exact
+  duplicate fills are skipped (`planStockMerge`, count-aware like trades).
+- Sector map: `src/data/sectors.ts` (GICS 11 + ETF/Fund + Unassigned; ~500
+  built-in tickers); user override wins, stored per ticker.
+- Backend: migration `supabase/migrations/0004_allocation.sql` adds
+  `stock_events` + `ticker_sectors` (RLS: owner-only, same shape as trades).
+  Store API: `importStockEvents`, `deleteStockEvent`, `setSector`; `clearAll`
+  also clears stock_events; JSON backup/restore carries both new fields.
+
 ### ⬜ TODO (in order) — billing is the next milestone
 | Linear | Work |
 |--------|------|

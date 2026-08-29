@@ -8,6 +8,7 @@ import {
   Radar,
   CalendarDays,
   Lightbulb,
+  PieChart,
   Upload,
   Cog,
   type LucideProps,
@@ -38,6 +39,7 @@ const NAV_GROUPS: NavGroup[] = [
     heading: "Positions",
     items: [
       { to: "/campaigns", label: "Wheel Campaigns", icon: CircleDashed },
+      { to: "/allocation", label: "Allocation", icon: PieChart },
       { to: "/trades", label: "Trades", icon: Table2 },
     ],
   },
